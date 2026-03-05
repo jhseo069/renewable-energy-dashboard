@@ -15,6 +15,7 @@
 | 실행 경로 | `e:\바이브코딩(Gemini,Claude Code)\renewable-energy-dashboard\` |
 | 실행 명령 | `streamlit run app.py` |
 | 로컬 URL | `http://localhost:8501` (포트는 상황에 따라 8502~8504로 변경될 수 있음) |
+| 클라우드 URL | `https://renewable-energy-dashboard-nsmgneobdtz3xqpddasevz.streamlit.app/` |
 | 버전 | v0.2.0 |
 
 ---
@@ -42,6 +43,20 @@ renewable-energy-dashboard/
 
 ---
 
+## 2-2. 추가된 디렉토리 (v0.3.0, 2026-03-05)
+
+```
+renewable-energy-dashboard/
+├── directives/
+│   └── policy_tracking_sop.md      # 정책/입법 수집 SOP (Layer 1)
+├── execution/
+│   ├── rss_crawler.py              # 부처 보도자료 RSS 수집 (Layer 3)
+│   └── law_api.py                  # 국회 법안 API 연동 (Layer 3, Mock 포함)
+├── app.py                          # Tab 3 실데이터 연동으로 업데이트
+```
+
+---
+
 ## 3. API 키 설정 (.env)
 
 ```
@@ -49,6 +64,7 @@ LAW_API_KEY=your_law_api_key_here          # 국가법령정보센터 (미연동
 ANTHROPIC_API_KEY=your_anthropic_api_key_here  # Claude AI (미연동)
 NAVER_CLIENT_ID=KVpRm83DQimDWn3N_3Uq      # 네이버 검색 API (연동 완료)
 NAVER_CLIENT_SECRET=z0ByXCovGJ             # 네이버 검색 API (연동 완료)
+ASSEMBLY_API_KEY=                          # 국회 오픈 API (미발급 → Mock 자동 전환)
 ```
 
 > **주의:** `.env` 파일의 `NAVER_CLIENT_SECRET`에서 숫자 `0`을 영문자 `O`로 혼동하지 않도록 주의. 과거에 이 오류로 401 인증 실패 발생 이력 있음.
@@ -67,9 +83,11 @@ NAVER_CLIENT_SECRET=z0ByXCovGJ             # 네이버 검색 API (연동 완료
 - 상세 내용은 아래 섹션 5~7 참조
 
 ### Tab 3: 🏛️ 정책 및 입법 동향
-- **상태:** UI 레이아웃 완성, API 연동 미구현 (Coming Soon)
-- **목표:** 열린국회정보 API (입법예고, 위원회 심의) + 중앙부처 RSS (산업부, 해수부, 환경부)
-- **준비 필요:** `feedparser` 라이브러리는 이미 `requirements.txt`에 추가됨
+- **상태:** ✅ **기능 구현 완료 (v0.3.0, 2026-03-05)**
+- 왼쪽: 부처 보도자료 — `execution/rss_crawler.py` 연동 (RSS 실패 시 Dummy 자동 표시)
+- 오른쪽: 국회 법안 — `execution/law_api.py` 연동 (API 키 미설정 시 Mock 자동 표시)
+- RSS 1시간 캐시, 법안 6시간 캐시
+- **RSS URL**: `https://www.korea.kr/etc/rss.do` (현재 bozo=1 반환 → Dummy 표시 중, 실 URL 확보 시 `RSS_SOURCES` 교체)
 
 ### Tab 4: 📡 유관기관 공지사항
 - **상태:** UI 레이아웃 완성, 크롤러 미구현 (Coming Soon)
@@ -136,7 +154,7 @@ _ENERGY_PUBLISHERS = ("전기신문", "에너지경제", "일렉트릭파워")
 ## 6. utils/news_crawler.py — 필터링 로직 상세
 
 ### 6-1. 전역 금지어 (_BAN_WORDS)
-제목 + 요약 결합 텍스트에 하나라도 포함되면 기사 제외:
+제목 + 요약 결합 텍스트에 하나라도 포함되면 기사 제외 (3대 전문지에는 미적용):
 ```python
 _BAN_WORDS = frozenset([
     # 주식·증권
@@ -146,29 +164,35 @@ _BAN_WORDS = frozenset([
     # 영상·사진·기타 불량 포맷
     "[영상]", "(영상)", "[동영상]", "(동영상)", "다시보기",
     "동영상", "영상뉴스", "포토", "사진", "인터뷰", "언터뷰",
+    # 로컬·지자체 행정 뉴스 (사업개발 무관) — 2026-03-05 추가
+    "로컬뉴스", "주민자치", "인터배터리",
 ])
 ```
 
 ### 6-2. 키워드별 조건부 금지어 (_KEYWORD_SPECIFIC_BANS)
-특정 키워드로 수집할 때만 적용되는 추가 금지어:
+특정 키워드로 수집할 때만 적용 (3대 전문지에는 미적용):
 ```python
 _KEYWORD_SPECIFIC_BANS: dict[str, frozenset] = {
-    "풍력": frozenset(["해상", "해상풍력"]),
-    # 이유: '풍력' 키워드로 검색하면 해상풍력 기사가 섞여 들어옴.
-    #       해상풍력은 별도 키워드로 수집하므로 여기서 제외.
-    # 추가 필요 시: "키워드": frozenset(["금지어1", "금지어2"]) 형식으로 추가
+    "풍력":     frozenset(["해상", "해상풍력"]),          # 해상풍력은 별도 키워드로 수집
+    "ESS":      frozenset(["자율제조", "인터배터리", "전시회"]),   # 제조·전시 무관 기사
+    "BESS":     frozenset(["자율제조", "인터배터리", "전시회"]),
+    "전력계통":  frozenset(["전기차", "EV충전", "EV 충전"]),      # EV는 별도 산업
+    "분산에너지": frozenset(["전기차", "EV충전", "EV 충전"]),
+    "수소":     frozenset(["공영충전소"]),                # 소비자용 수소버스 기사
 }
 ```
 
-### 6-3. _is_quality_article() 품질 필터
+### 6-3. _is_quality_article() 품질 필터 (2026-03-05 개정)
 ```
-1. 3대 전문지이면 → 무조건 True (모든 필터 우회)
-2. 제목에 검색 키워드 없으면 → False (낚시성 기사 제거)
-3. 요약 길이 < 30자이면 → False (내용 없는 기사 제거)
+1. 제목에 검색 키워드 없으면 → False  ← 전문지 포함 공통 적용 (개정)
+2. 3대 전문지이면 → True (금지어·요약 길이만 우회, 키워드 체크는 적용)
+3. 요약 길이 < 30자이면 → False
 4. 전역 금지어 포함이면 → False
 5. 키워드별 조건부 금지어 포함이면 → False
 6. 위 모두 통과 → True
 ```
+> **개정 이유:** 에너지경제·전기신문도 로컬뉴스·지자체 행정·EV 충전 등 무관 기사를 다수 발행함.
+> 제목 키워드 체크를 전문지에도 적용해 노이즈 대폭 감소.
 
 ### 6-4. _deduplicate_by_similarity() 유사도 중복 제거
 - **임계값(threshold):** 0.4 (40%)
@@ -278,3 +302,11 @@ cmd /c "taskkill /F /IM streamlit.exe"
 3. **아카이브 기간 필터 전 저장 원칙:** `save_to_archive()`는 기간 필터 적용 전 전체 데이터를 저장. 사용자가 어떤 기간을 선택해도 아카이브에는 전체가 보존됨.
 4. **display=100 유지:** 네이버 API 최대 수집 한도. 모수를 줄이면 중요 기사 누락 위험.
 5. **키워드 in 제목 필터:** `keyword_in_title=kw` 파라미터로 낚시성 기사 제거. 수동 검색(`추가 키워드 직접 검색`)에서는 이 파라미터를 비워둬야 함(현재 코드 그대로).
+
+---
+
+## 12. 배포 상태
+- **현재 상태**: ✅ **배포 완료**
+- **실운영 URL**: [https://renewable-energy-dashboard-nsmgneobdtz3xqpddasevz.streamlit.app/](https://renewable-energy-dashboard-nsmgneobdtz3xqpddasevz.streamlit.app/)
+- **보안 점검**: `.gitignore`에 `.env`, `data/`, `news_archive/` 제외 적용 상태로 푸시됨
+- **의존성 점검**: `requirements.txt` 패키지 모두 반영 완료

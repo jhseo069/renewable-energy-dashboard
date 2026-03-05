@@ -7,11 +7,19 @@
 - Tab 4: 유관기관 공지사항    (한전, KPX, 지자체 크롤링)
 """
 
+import sys
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
+from pathlib import Path
 from dotenv import load_dotenv
 from utils.news_crawler import search_naver_news, save_to_archive, to_csv_bytes
+
+# execution/ 디렉토리를 Python 경로에 추가
+# app.py와 같은 레벨의 execution/ 폴더에서 스크립트를 import하기 위함
+sys.path.insert(0, str(Path(__file__).parent / "execution"))
+from rss_crawler import fetch_rss_articles
+from law_api import fetch_all_bills
 
 load_dotenv()
 
@@ -68,6 +76,19 @@ def _fetch_all_keyword_news(keywords: tuple) -> dict:
         except Exception:
             result[kw] = []  # 개별 키워드 실패는 빈 리스트로 처리
     return result
+
+# ── 정책/입법 동향 캐시 함수 ──────────────────────────────────────────
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_policy_rss() -> list[dict]:
+    """부처 보도자료 RSS 수집 (1시간 캐시). 실패 시 Dummy 반환."""
+    return fetch_rss_articles(filter_energy=True)
+
+
+@st.cache_data(ttl=21600, show_spinner=False)
+def _fetch_assembly_bills() -> list[dict]:
+    """국회 법안 수집 (6시간 캐시). API 키 없으면 Mock 반환."""
+    return fetch_all_bills()
+
 
 # ─────────────────────────────────────────────
 # 페이지 기본 설정
@@ -461,8 +482,9 @@ with tab2:
                          "summary": "요약", "link": "링크"},
                 inplace=True,
             )
-        # 아카이브 자동 저장 (세션당 1회) — 기간 필터 적용 전 전체 저장
-        if "news_archived_today" not in st.session_state and not combined_raw.empty:
+        # 아카이브 자동 저장 — 날짜가 바뀌면 재저장 (탭을 이틀에 걸쳐 열어둔 경우 대응)
+        _today_str = datetime.today().strftime("%Y-%m-%d")
+        if st.session_state.get("news_archived_today", "")[:10] != _today_str and not combined_raw.empty:
             archive_cols = ["날짜", "언론사", "제목", "요약", "링크"]
             saved_path = save_to_archive(combined_raw[archive_cols])
             st.session_state.news_archived_today = saved_path.name
@@ -654,72 +676,138 @@ with tab3:
     st.markdown("### 🏛️ 정책 및 입법 동향")
     st.markdown(
         "<p style='color:#8892b0;'>"
-        "국회 API와 중앙부처 RSS를 통해 입법예고·위원회 심의·부처 보도자료를 모니터링합니다."
+        "유관 부처 보도자료(RSS)와 국회 법안(오픈 API)을 자동 수집합니다. "
+        "국회 API 키 미설정 시 Mock 데이터가 표시됩니다."
         "</p>",
         unsafe_allow_html=True,
     )
 
-    # 소스별 현황
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.markdown('<p class="section-title">🏛️ 국회 (열린국회정보 API)</p>', unsafe_allow_html=True)
+    # 갱신 버튼
+    col_pol_refresh, col_pol_info = st.columns([1, 4])
+    with col_pol_refresh:
+        if st.button("🔄 갱신", key="policy_refresh", use_container_width=True,
+                     help="RSS·법안 캐시를 초기화하고 최신 데이터를 다시 수집합니다."):
+            st.cache_data.clear()
+            st.rerun()
+    with col_pol_info:
         st.markdown(
-            """<div class="coming-card">
-                <h4>연동 예정</h4>
-                <ul>
-                    <li>에너지 관련 법안 입법예고 자동 수집</li>
-                    <li>산업통상자원위원회 회의록 모니터링</li>
-                    <li>법안 처리 단계 추적 (발의→심의→본회의)</li>
-                </ul>
-                <p style="margin-top:0.6rem;">✅ 준비: 열린국회정보포털 API 키 신청</p>
-            </div>""",
+            "<p style='color:#8892b0; font-size:0.82rem; margin-top:0.5rem;'>"
+            "RSS 1시간 캐시 · 법안 6시간 캐시 · "
+            "<code>ASSEMBLY_API_KEY</code> 설정 시 실서버 전환</p>",
             unsafe_allow_html=True,
         )
-        # Mock 카드
-        mock_bills = [
-            ("전기사업법 일부개정안", "산업통상자원위", "심의 중", "2026-02-20"),
-            ("재생에너지 집적화단지 지원 특별법", "본회의", "통과", "2026-02-10"),
-        ]
-        for bill, committee, status, date in mock_bills:
-            color = "#64ffda" if status == "통과" else "#ffc837"
-            st.markdown(
-                f"""<div class="card">
-                    <p class="meta">📋 {committee} · {date}</p>
-                    <h4>{bill}</h4>
-                    <p>상태: <span style="color:{color}; font-weight:600;">{status}</span></p>
-                </div>""",
-                unsafe_allow_html=True,
-            )
 
-    with col_b:
-        st.markdown('<p class="section-title">📢 중앙부처 보도자료 (RSS)</p>', unsafe_allow_html=True)
-        st.markdown(
-            """<div class="coming-card">
-                <h4>연동 예정</h4>
-                <ul>
-                    <li>산업통상자원부 보도자료</li>
-                    <li>해양수산부 보도자료 (해상풍력)</li>
-                    <li>환경부 보도자료 (환경영향평가)</li>
-                    <li>전라남도청 공지사항</li>
-                </ul>
-                <p style="margin-top:0.6rem;">✅ 준비: <code>feedparser</code> 라이브러리 (이미 추가됨)</p>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-        # Mock 카드
-        mock_rss = [
-            ("산업부", "2026년 재생에너지 계획입지 1차 선정 결과 발표", "2026-03-02"),
-            ("해수부", "해상풍력 발전단지 구역 지정 공고 (서남해역)", "2026-02-28"),
-            ("환경부", "태양광 환경영향평가 간소화 고시 개정 입법예고", "2026-02-25"),
-        ]
-        for dept, title, date in mock_rss:
-            st.markdown(
-                f"""<div class="card">
-                    <p class="meta">🏢 {dept} · {date}</p>
-                    <h4>{title}</h4>
-                </div>""",
-                unsafe_allow_html=True,
-            )
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── 두 섹션 나란히 배치 ────────────────────────────────────────────
+    col_rss, col_law = st.columns(2)
+
+    # ── 왼쪽: 부처 보도자료 RSS ────────────────────────────────────────
+    with col_rss:
+        st.markdown('<p class="section-title">📢 유관 부처 보도자료 (RSS)</p>', unsafe_allow_html=True)
+
+        with st.spinner("보도자료 수집 중…"):
+            rss_articles = _fetch_policy_rss()
+
+        if rss_articles:
+            # 부처별로 그룹핑해서 Expander로 표시
+            dept_groups: dict[str, list] = {}
+            for article in rss_articles:
+                dept = article["source"]
+                dept_groups.setdefault(dept, []).append(article)
+
+            dept_icons = {
+                "산업부": "⚡",   # 산업통상부 (구 산업통상자원부)
+                "기후부": "🌿",   # 기후에너지환경부
+                "해수부": "🌊",   # 해양수산부
+            }
+
+            for dept, articles in dept_groups.items():
+                icon = dept_icons.get(dept, "🏛️")
+                has_dummy = any(a["is_dummy"] for a in articles)
+                dummy_badge = " <span style='color:#ffc837; font-size:0.75rem;'>[연결 준비 중]</span>" if has_dummy else ""
+
+                with st.expander(f"{icon} {dept}  ({len(articles)}건)", expanded=True):
+                    for article in articles[:5]:  # 부처당 최대 5건 표시
+                        if article["is_dummy"]:
+                            st.markdown(
+                                f"""<div class="coming-card" style="margin-bottom:0.5rem;">
+                                    <p class="meta" style="color:#ffc837;">🔧 {article['source']} · {article['date']}</p>
+                                    <h4 style="color:#ffc837; font-size:0.9rem;">{article['title']}</h4>
+                                    <p>{article['summary']}</p>
+                                </div>""",
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            st.markdown(
+                                f"""<div class="card" style="margin-bottom:0.5rem;">
+                                    <p class="meta">🏢 {article['source']} · {article['date']}</p>
+                                    <h4 style="font-size:0.92rem;">
+                                        <a href="{article['link']}" target="_blank"
+                                           style="color:#ccd6f6; text-decoration:none;">{article['title']}</a>
+                                    </h4>
+                                    <p>{article['summary'][:120]}…</p>
+                                </div>""",
+                                unsafe_allow_html=True,
+                            )
+        else:
+            st.info("수집된 보도자료가 없습니다.")
+
+    # ── 오른쪽: 국회 법안 ─────────────────────────────────────────────
+    with col_law:
+        st.markdown('<p class="section-title">🏛️ 국회 법안 동향 (해상풍력·신재생)</p>', unsafe_allow_html=True)
+
+        with st.spinner("법안 수집 중…"):
+            bills = _fetch_assembly_bills()
+
+        if bills:
+            is_mock_mode = any(b["is_mock"] for b in bills)
+            if is_mock_mode:
+                st.markdown(
+                    "<div class='coming-card' style='margin-bottom:1rem;'>"
+                    "<h4>🔑 API 키 미설정 — Mock 데이터 표시 중</h4>"
+                    "<p><code>.env</code>에 <code>ASSEMBLY_API_KEY</code>를 설정하면 "
+                    "실제 국회 법안 데이터로 자동 전환됩니다.<br>"
+                    "발급: <a href='https://open.assembly.go.kr' target='_blank' "
+                    "style='color:#00c9ff;'>open.assembly.go.kr</a> (무료)</p>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+
+            # 법안 상태별 색상 매핑
+            status_colors = {
+                "원안가결": "#64ffda",
+                "수정가결": "#64ffda",
+                "본회의 부의": "#92fe9d",
+                "소위심사": "#ffc837",
+                "심사중": "#8892b0",
+                "부결": "#ff6b6b",
+                "임기만료폐기": "#ff6b6b",
+            }
+
+            for bill in bills:
+                mock_badge = " [MOCK]" if bill["is_mock"] else ""
+                status_color = status_colors.get(bill["status"], "#8892b0")
+                st.markdown(
+                    f"""<div class="card" style="margin-bottom:0.6rem;">
+                        <p class="meta">
+                            📋 {bill['committee']}{mock_badge} · {bill['propose_date']}
+                        </p>
+                        <h4 style="font-size:0.9rem;">
+                            <a href="{bill['link']}" target="_blank"
+                               style="color:#ccd6f6; text-decoration:none;">{bill['title']}</a>
+                        </h4>
+                        <p>
+                            👤 {bill['proposer']}&nbsp;&nbsp;
+                            <span style="color:{status_color}; font-weight:700;">
+                                ● {bill['status']}
+                            </span>
+                        </p>
+                    </div>""",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.info("수집된 법안이 없습니다.")
 
 
 # =============================================

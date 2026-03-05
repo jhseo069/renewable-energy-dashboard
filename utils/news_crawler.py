@@ -26,15 +26,55 @@ NAVER_NEWS_URL = "https://openapi.naver.com/v1/search/news.json"
 ENERGY_PUBLISHERS = ["전기신문", "에너지경제", "일렉트릭파워"]
 
 # 언론사 URL → 이름 매핑
+# 2023-2026년 실제 수집 이력 기반으로 확충 (빈도순)
 _SOURCE_MAP = {
-    "electimes.com": "전기신문",
-    "energy-news.co.kr": "에너지경제",
-    "ekn.kr": "에너지경제",
-    "electrica.co.kr": "일렉트릭파워",
+    # ── 3대 에너지 전문지 ─────────────────────
+    "electimes.com":    "전기신문",
+    "energy-news.co.kr":"에너지경제",
+    "ekn.kr":           "에너지경제",
+    "electrica.co.kr":  "일렉트릭파워",
+    # ── 에너지 전문 매체 ──────────────────────
+    "epj.co.kr":        "전기저널",
+    "e2news.com":       "이투뉴스",
+    "todayenergy.kr":   "투데이에너지",
+    "energydaily.co.kr":"에너지데일리",
+    "ikld.kr":          "에너지타임즈",
+    # ── 통신사 ────────────────────────────────
+    "yna.co.kr":        "연합뉴스",
+    "newsis.com":       "뉴시스",
+    "news1.kr":         "뉴스1",
+    "nocutnews.co.kr":  "노컷뉴스",
+    # ── 경제지 ────────────────────────────────
+    "hankyung.com":     "한국경제",
+    "mk.co.kr":         "매일경제",
+    "sedaily.com":      "서울경제",
+    "edaily.co.kr":     "이데일리",
+    "news.mt.co.kr":    "머니투데이",
+    "mt.co.kr":         "머니투데이",
+    "fnnews.com":       "파이낸셜뉴스",
+    "asiae.co.kr":      "아시아경제",
+    "view.asiae.co.kr": "아시아경제",
+    # ── 종합일간지 ────────────────────────────
+    "chosun.com":       "조선일보",
+    "biz.chosun.com":   "조선비즈",
+    "hani.co.kr":       "한겨레",
+    "segye.com":        "세계일보",
+    "kmib.co.kr":       "국민일보",
+    "busan.com":        "부산일보",
+    "daily.hankooki.com":"한국일보",
+    "hankookilbo.com":  "한국일보",
+    # ── IT·산업 전문 ──────────────────────────
+    "etnews.com":       "전자신문",
+    "zdnet.co.kr":      "ZDNet",
+    "asiatoday.co.kr":  "아시아투데이",
+    # ── 방송 ──────────────────────────────────
+    "news.kbs.co.kr":   "KBS",
+    "sentv.co.kr":      "SEN TV",
 }
 
 # ── 품질 필터 설정 ──────────────────────────────────────────
-# 3대 전문지는 모든 필터를 우회 (최우선 노출)
+# 3대 전문지는 금지어·요약 길이 필터를 우회하되, 제목 키워드 체크는 적용
+# (에너지경제·전기신문도 로컬뉴스·지자체 행정 등 무관 기사가 섞이므로)
 _BYPASS_PUBLISHERS = frozenset(["전기신문", "에너지경제", "일렉트릭파워"])
 
 # 금지어 목록 — 제목(title) 또는 요약(summary)에 하나라도 포함되면 제외
@@ -46,15 +86,25 @@ _BAN_WORDS = frozenset([
     # 영상·사진·기타 불량 포맷
     "[영상]", "(영상)", "[동영상]", "(동영상)", "다시보기",
     "동영상", "영상뉴스", "포토", "사진", "인터뷰", "언터뷰",
+    # 로컬·지자체 행정 뉴스 (사업개발 무관)
+    "로컬뉴스", "주민자치", "인터배터리",
 ])
 
 # 요약 최소 길이 (이보다 짧으면 알맹이 없는 기사로 간주)
 _MIN_SUMMARY_LEN = 30
 
 # 키워드별 조건부 금지어 — 특정 키워드로 수집할 때만 적용
-# 예) '풍력' 검색 시 '해상풍력' 기사 제외 (해상풍력은 별도 키워드로 수집)
 _KEYWORD_SPECIFIC_BANS: dict[str, frozenset] = {
+    # '풍력' 검색 시 해상풍력 기사 제외 (해상풍력은 별도 키워드로 수집)
     "풍력": frozenset(["해상", "해상풍력"]),
+    # ESS/BESS: 전시·자율제조 기사 제외 (사업개발 무관)
+    "ESS":  frozenset(["자율제조", "인터배터리", "전시회"]),
+    "BESS": frozenset(["자율제조", "인터배터리", "전시회"]),
+    # 전력계통·분산에너지: 전기차·EV 충전 기사 제외 (별도 산업)
+    "전력계통":  frozenset(["전기차", "EV충전", "EV 충전"]),
+    "분산에너지": frozenset(["전기차", "EV충전", "EV 충전"]),
+    # 수소: 소비자용 공영충전소 기사 제외
+    "수소": frozenset(["공영충전소"]),
 }
 
 
@@ -89,31 +139,35 @@ def _deduplicate_by_similarity(articles: list[dict], threshold: float = 0.3) -> 
 def _is_quality_article(item: dict, keyword: str = "") -> bool:
     """
     기사 품질 검사. True이면 포함, False이면 제외.
-    3대 전문지(전기신문·에너지경제·일렉트릭파워)는 모든 필터를 우회해 항상 포함.
-    title과 summary 모두 금지어 검사 대상.
-    """
-    # 3대 전문지는 무조건 통과
-    if item.get("source", "") in _BYPASS_PUBLISHERS:
-        return True
 
+    3대 전문지(전기신문·에너지경제·일렉트릭파워) 처리 방식:
+      - 제목 키워드 체크: 적용 (로컬뉴스·행정 기사 제거)
+      - 금지어·요약 길이 체크: 우회 (중요 기사 누락 방지)
+    """
     title = item.get("title", "")
     summary = item.get("summary", "")
+    is_bypass = item.get("source", "") in _BYPASS_PUBLISHERS
 
-    # 제목에 핵심 키워드 없으면 낚시성 기사로 간주
+    # [1] 제목에 핵심 키워드 없으면 제외 — 전문지 포함 공통 적용
+    #     (에너지경제 "춘천시 소식", "주민자치위원회" 등 무관 기사 차단)
     if keyword and keyword not in title:
         return False
 
-    # 요약이 너무 짧거나 비어있음
+    # [2] 3대 전문지는 이후 금지어·요약 길이 필터 우회
+    if is_bypass:
+        return True
+
+    # [3] 요약이 너무 짧거나 비어있음
     if len(summary) < _MIN_SUMMARY_LEN:
         return False
 
-    # 제목 또는 요약에 금지어 포함 시 제외
+    # [4] 제목 또는 요약에 금지어 포함 시 제외
     combined = title + summary
     for word in _BAN_WORDS:
         if word in combined:
             return False
 
-    # 키워드별 조건부 금지어 검사 (예: '풍력' 검색 시 해상풍력 기사 제외)
+    # [5] 키워드별 조건부 금지어 검사
     for word in _KEYWORD_SPECIFIC_BANS.get(keyword, frozenset()):
         if word in combined:
             return False
