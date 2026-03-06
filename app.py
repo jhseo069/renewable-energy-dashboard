@@ -728,28 +728,29 @@ with tab3:
                 dummy_badge = " <span style='color:#ffc837; font-size:0.75rem;'>[연결 준비 중]</span>" if has_dummy else ""
 
                 with st.expander(f"{icon} {dept}  ({len(articles)}건)", expanded=True):
-                    for article in articles[:5]:  # 부처당 최대 5건 표시
-                        if article["is_dummy"]:
-                            st.markdown(
-                                f"""<div class="coming-card" style="margin-bottom:0.5rem;">
-                                    <p class="meta" style="color:#ffc837;">🔧 {article['source']} · {article['date']}</p>
-                                    <h4 style="color:#ffc837; font-size:0.9rem;">{article['title']}</h4>
-                                    <p>{article['summary']}</p>
-                                </div>""",
-                                unsafe_allow_html=True,
-                            )
-                        else:
-                            st.markdown(
-                                f"""<div class="card" style="margin-bottom:0.5rem;">
-                                    <p class="meta">🏢 {article['source']} · {article['date']}</p>
-                                    <h4 style="font-size:0.92rem;">
-                                        <a href="{article['link']}" target="_blank"
-                                           style="color:#ccd6f6; text-decoration:none;">{article['title']}</a>
-                                    </h4>
-                                    <p>{article['summary'][:120]}…</p>
-                                </div>""",
-                                unsafe_allow_html=True,
-                            )
+                    with st.container(height=400):
+                        for article in articles:
+                            if article["is_dummy"]:
+                                st.markdown(
+                                    f"""<div class="coming-card" style="margin-bottom:0.5rem;">
+                                        <p class="meta" style="color:#ffc837;">🔧 {article['source']} · {article['date']}</p>
+                                        <h4 style="color:#ffc837; font-size:0.9rem;">{article['title']}</h4>
+                                        <p>{article['summary']}</p>
+                                    </div>""",
+                                    unsafe_allow_html=True,
+                                )
+                            else:
+                                st.markdown(
+                                    f"""<div class="card" style="margin-bottom:0.5rem;">
+                                        <p class="meta">🏢 {article['source']} · {article['date']}</p>
+                                        <h4 style="font-size:0.92rem;">
+                                            <a href="{article['link']}" target="_blank"
+                                               style="color:#ccd6f6; text-decoration:none;">{article['title']}</a>
+                                        </h4>
+                                        <p>{article['summary'][:120]}…</p>
+                                    </div>""",
+                                    unsafe_allow_html=True,
+                                )
         else:
             st.info("수집된 보도자료가 없습니다.")
 

@@ -83,11 +83,19 @@ ASSEMBLY_API_KEY=                          # 국회 오픈 API (미발급 → Mo
 - 상세 내용은 아래 섹션 5~7 참조
 
 ### Tab 3: 🏛️ 정책 및 입법 동향
-- **상태:** ✅ **기능 구현 완료 (v0.3.0, 2026-03-05)**
+- **상태:** ✅ **기능 구현 완료 + 필터 개선 완료 (v0.3.0, 2026-03-05~06)**
 - 왼쪽: 부처 보도자료 — `execution/rss_crawler.py` 연동 (RSS 실패 시 Dummy 자동 표시)
 - 오른쪽: 국회 법안 — `execution/law_api.py` 연동 (API 키 미설정 시 Mock 자동 표시)
 - RSS 1시간 캐시, 법안 6시간 캐시
-- **RSS URL**: `https://www.korea.kr/etc/rss.do` (현재 bozo=1 반환 → Dummy 표시 중, 실 URL 확보 시 `RSS_SOURCES` 교체)
+- **RSS URL (실운영 중):**
+  - 산업통상부: `https://www.korea.kr/rss/dept_motir.xml`
+  - 기후에너지환경부: `https://www.korea.kr/rss/dept_mcee.xml`
+  - 해양수산부: `https://www.korea.kr/rss/dept_mof.xml`
+  - 산림청: RSS 미제공 → 제외
+- **RSS bozo=True 이슈**: korea.kr RSS는 charset 선언(us-ascii)과 실제 인코딩(utf-8) 불일치로 bozo=True 반환되지만 entries는 정상. `if not feed.entries`만 실패 조건으로 처리.
+- **에너지 키워드 필터**: 제목(title)만 체크, 요약(summary) 미사용. 광범위 키워드(에너지·해상·발전·전력·허가·온실가스) 제거하고 신재생 특화 키워드만 유지.
+- **필터 적용 후 0건**: Dummy 카드 표시 안 함 (RSS 연결 실패 시에만 Dummy 표시)
+- **UI 개선 사항 완료 (2026-03-06)**: Tab 3 RSS expander 내부에 `st.container(height=400)` 적용하여 모든 기사 스크롤 확인 가능.
 
 ### Tab 4: 📡 유관기관 공지사항
 - **상태:** UI 레이아웃 완성, 크롤러 미구현 (Coming Soon)
