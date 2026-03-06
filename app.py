@@ -886,7 +886,7 @@ with tab3:
 
     # ── 오른쪽: 국회 법안 ─────────────────────────────────────────────
     with col_law:
-        st.markdown('<p class="section-title">🏛️ 국회 법안 동향 (해상풍력·신재생)</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-title">🏛️ 국회 법안 동향 (신재생)</p>', unsafe_allow_html=True)
 
         with st.spinner("법안 수집 중…"):
             bills = _fetch_assembly_bills()

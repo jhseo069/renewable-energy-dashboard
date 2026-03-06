@@ -115,21 +115,31 @@ def fetch_assembly_bills(keyword: str = "해상풍력") -> list[dict]:
 
     try:
         # 국회 오픈 API: 법률안 목록 조회 (TVBPMBILL11)
-        # pIndex: 페이지 번호 (1부터 시작)
-        # pSize: 페이지당 결과 수 (최대 100)
+        # AGE=22: 제22대 국회 (2024.05.30~) 법안만 조회
+        # pIndex: 페이지 번호 (1부터 시작), pSize: 페이지당 결과 수 (최대 100)
         response = requests.get(
             f"{ASSEMBLY_API_BASE}/TVBPMBILL11",
             params={
-                "KEY": ASSEMBLY_API_KEY,
-                "Type": "json",
-                "pIndex": 1,
-                "pSize": 30,
+                "KEY":         ASSEMBLY_API_KEY,
+                "Type":        "json",
+                "pIndex":      1,
+                "pSize":       100,
+                "AGE":         22,          # 제22대 국회 고정
                 "SEARCH_WORD": keyword,
             },
-            timeout=10,
+            timeout=15,
         )
         response.raise_for_status()
         data = response.json()
+
+        # API 최상위 RESULT 키 감지 — 인증 오류, 파라미터 오류 등 API 레벨 에러
+        # 정상 응답은 {"TVBPMBILL11": [...]} 구조이며, 에러는 {"RESULT": {...}} 구조
+        if "RESULT" in data and "TVBPMBILL11" not in data:
+            result = data["RESULT"]
+            code = result.get("CODE", "")
+            msg  = result.get("MESSAGE", "")
+            print(f"[국회 API] 에러 응답 (코드: {code}): {msg} → Mock 데이터 반환")
+            return _make_mock_bills()
 
         # 국회 API 응답 구조: {"TVBPMBILL11": [{"head": [...]}, {"row": [...]}]}
         # 두 번째 요소의 "row" 키가 실제 법안 목록
@@ -140,15 +150,15 @@ def fetch_assembly_bills(keyword: str = "해상풍력") -> list[dict]:
         for row in rows:
             raw_status = row.get("PROC_RESULT_CD", "")
             bills.append({
-                "bill_id": row.get("BILL_ID", ""),
-                "title": row.get("BILL_NAME", ""),
-                "proposer": row.get("PROPOSER", ""),
-                "committee": row.get("CURR_COMMITTEE", ""),
+                "bill_id":      row.get("BILL_ID", ""),
+                "title":        row.get("BILL_NAME", ""),
+                "proposer":     row.get("PROPOSER", ""),
+                "committee":    row.get("CURR_COMMITTEE", ""),
                 # 상태 코드를 읽기 쉬운 한국어로 변환
-                "status": BILL_STATUS_MAP.get(raw_status, raw_status or "심사중"),
+                "status":       BILL_STATUS_MAP.get(raw_status, raw_status or "심사중"),
                 "propose_date": row.get("PROPOSE_DT", ""),
-                "link": row.get("DETAIL_LINK", ""),
-                "is_mock": False,
+                "link":         row.get("DETAIL_LINK", ""),
+                "is_mock":      False,
             })
 
         return bills
