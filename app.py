@@ -742,8 +742,13 @@ with tab3:
             # 보도자료 다운로드 버튼 추가
             dl_df = pd.DataFrame(rss_articles)
             if not dl_df.empty:
+                def _get_att_str(link):
+                    atts = _fetch_attachments_cached(link)
+                    return " | ".join([f"{a['name']} ({a['url']})" for a in atts]) if atts else ""
+                
+                dl_df["첨부파일"] = dl_df["link"].apply(_get_att_str)
                 dl_df.rename(columns={"date": "날짜", "source": "부처", "title": "제목", "summary": "요약", "link": "링크"}, inplace=True)
-                dl_df = dl_df[["날짜", "부처", "제목", "요약", "링크"]]
+                dl_df = dl_df[["날짜", "부처", "제목", "요약", "링크", "첨부파일"]]
                 today_str = datetime.today().strftime("%Y-%m-%d")
                 st.download_button(
                     label="📥 현재 보도자료 엑셀(CSV) 다운로드",
@@ -787,13 +792,20 @@ with tab3:
                                 attachments = _fetch_attachments_cached(article["link"])
                                 att_html = ""
                                 if attachments:
-                                    att_links = " &nbsp;|&nbsp; ".join(
+                                    att_links = "".join(
                                         f'<a href="{att["url"]}" target="_blank" '
-                                        f'style="color:#00c9ff; font-size:0.78rem;">'
+                                        f'style="display:inline-block; margin:0.3rem 0.4rem 0 0; padding:0.25rem 0.6rem; '
+                                        f'background:rgba(100,255,218,0.1); border:1px solid rgba(100,255,218,0.25); '
+                                        f'border-radius:6px; color:#64ffda; font-size:0.75rem; text-decoration:none; '
+                                        f'transition:all 0.2s ease;">'
                                         f'📎 {att["name"][:40]}</a>'
                                         for att in attachments
                                     )
-                                    att_html = f'<p style="margin-top:0.3rem;">{att_links}</p>'
+                                    att_html = (
+                                        f'<div style="margin-top:0.8rem; padding-top:0.6rem; border-top:1px dashed rgba(255,255,255,0.1);">'
+                                        f'<span style="font-size:0.75rem; color:#8892b0; display:block;">⬇️ 첨부파일 다운로드</span>'
+                                        f'{att_links}</div>'
+                                    )
 
                                 st.markdown(
                                     f"""<div class="card" style="margin-bottom:0.5rem;">
