@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 from utils.news_crawler import search_naver_news, save_to_archive, to_csv_bytes
+from utils.law_api import search_ordinances
 
 # execution/ 디렉토리를 Python 경로에 추가
 # app.py와 같은 레벨의 execution/ 폴더에서 스크립트를 import하기 위함
@@ -302,11 +303,11 @@ with st.sidebar:
 
     st.markdown("**API 연동 현황**")
     api_status = [
-        ("badge-pending", "● 국가법령정보센터 API"),
+        ("badge-ready",   "● 국가법령정보센터 API"),
         ("badge-pending", "● Claude AI"),
         ("badge-ready",   "● 네이버 뉴스 API"),
-        ("badge-plan",    "● 국회 열린국회 API"),
-        ("badge-plan",    "● 중앙부처 RSS"),
+        ("badge-ready",   "● 국회 열린국회 API"),
+        ("badge-ready",   "● 중앙부처 RSS"),
         ("badge-plan",    "● 한전/KPX 크롤러"),
     ]
     for cls, label in api_status:
@@ -315,7 +316,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         "<p style='color:#8892b0; font-size:0.8rem;'>"
-        "신재생에너지 사업개발팀<br>사내 대시보드 v0.2.0</p>",
+        "신재생에너지 사업개발팀<br>사내 대시보드 v0.4.0</p>",
         unsafe_allow_html=True,
     )
 
@@ -353,31 +354,11 @@ with tab1:
     st.markdown("### 📜 지자체 조례 · 입지 규제 분석")
     st.markdown(
         "<p style='color:#8892b0;'>"
-        "국가법령정보센터 API로 지자체 조례를 검색하고, Claude AI가 핵심 규제 사항을 자동 분석합니다."
+        "국가법령정보센터 API로 지자체 조례를 검색합니다. "
+        "Claude AI 자동 분석 기능은 <code>ANTHROPIC_API_KEY</code> 설정 후 추가 예정입니다."
         "</p>",
         unsafe_allow_html=True,
     )
-
-    # KPI 행
-    kpi_cols = st.columns(4)
-    kpis = [
-        ("🏛️", "연동 대기", "법령 API"),
-        ("📋", "—", "분석 완료 조례"),
-        ("🤖", "연동 대기", "Claude 분석"),
-        ("⚠️", "—", "규제 알림"),
-    ]
-    for col, (icon, value, label) in zip(kpi_cols, kpis):
-        with col:
-            st.markdown(
-                f"""<div class="kpi-card">
-                    <div style="font-size:1.4rem;">{icon}</div>
-                    <div class="value">{value}</div>
-                    <div class="label">{label}</div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("<br>", unsafe_allow_html=True)
 
     # 검색 영역
     col_q, col_btn = st.columns([4, 1])
@@ -388,36 +369,103 @@ with tab1:
             label_visibility="collapsed",
         )
     with col_btn:
-        st.button("🔍 검색", use_container_width=True)
+        search_clicked = st.button("🔍 검색", use_container_width=True)
 
-    # 예정 기능 안내
-    st.markdown(
-        """<div class="coming-card">
-            <h4>🚀 연동 예정 기능</h4>
-            <ul>
-                <li><b>국가법령정보센터 API</b> — 조례 키워드 검색 및 원문 조회</li>
-                <li><b>Claude AI 자동 분석</b> — 이격거리·소음·농지 전용 등 핵심 규제 항목 요약</li>
-                <li><b>지자체별 필터</b> — 전라남도, 경상남도, 제주도 등 권역별 비교</li>
-                <li><b>규제 변경 알림</b> — 검색 조례 개정 시 자동 알림</li>
-            </ul>
-            <p style="margin-top:0.6rem;">✅ 준비 사항: <code>.env</code>에 <code>LAW_API_KEY</code>와 <code>ANTHROPIC_API_KEY</code> 설정</p>
-        </div>""",
-        unsafe_allow_html=True,
-    )
+    # 검색 버튼 클릭 시 API 호출
+    if search_clicked and search_query:
+        with st.spinner("검색 중…"):
+            try:
+                result = search_ordinances(search_query)
+                st.session_state["law_search_result"] = result
+                st.session_state["law_search_query"] = search_query
+            except ValueError as e:
+                st.error(f"🔑 {e}")
+                st.session_state.pop("law_search_result", None)
+            except Exception as e:
+                st.error(f"❌ 조례 검색 오류: {e}")
+                st.session_state.pop("law_search_result", None)
 
-    # 결과 영역 Mock
-    st.markdown('<p class="section-title">검색 결과 (샘플 레이아웃)</p>', unsafe_allow_html=True)
-    mock_laws = [
-        ("전라남도 신안군 태양광발전시설 설치 및 관리 조례", "신안군", "2025-11-01", "이격거리 100m, 농지 전용 제한"),
-        ("전남 진도군 풍력발전시설 설치 기준 조례", "진도군", "2025-08-15", "소음 기준 45dB, 민가 이격 300m"),
-        ("전라남도 ESS 설치 안전 관리 조례", "전라남도", "2025-06-20", "소방법 병행 적용, 분리 설치 의무"),
+    law_result = st.session_state.get("law_search_result")
+    law_query  = st.session_state.get("law_search_query", "")
+
+    # KPI 행
+    kpi_cols = st.columns(4)
+    kpis = [
+        ("🏛️", str(law_result["total"]) if law_result else "✅ 연동 완료", "검색된 조례 수"),
+        ("📋", str(len(law_result["items"])) if law_result else "—", "현재 목록"),
+        ("🤖", "예정", "Claude AI 분석"),
+        ("⚠️", "—", "규제 알림"),
     ]
-    for title, org, date, summary in mock_laws:
+    for col, (icon, value, label) in zip(kpi_cols, kpis):
+        with col:
+            st.markdown(
+                f"""<div class="kpi-card">
+                    <div style="font-size:1.4rem;">{icon}</div>
+                    <div class="value" style="font-size:1.3rem;">{value}</div>
+                    <div class="label">{label}</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── 검색 결과 표시 ─────────────────────────────────────────────────
+    if law_result:
+        items = law_result["items"]
         st.markdown(
-            f"""<div class="card">
-                <p class="meta">📍 {org} · {date}</p>
-                <h4>{title}</h4>
-                <p>🤖 <b>AI 분석 예정:</b> {summary}</p>
+            f'<p class="section-title">검색 결과: "{law_query}" (전체 {law_result["total"]}건)</p>',
+            unsafe_allow_html=True,
+        )
+        if items:
+            for item in items:
+                name_html = (
+                    f'<a href="{item["link"]}" target="_blank" '
+                    f'style="color:#ccd6f6; text-decoration:none;">{item["name"]}</a>'
+                    if item["link"] else item["name"]
+                )
+                st.markdown(
+                    f"""<div class="card">
+                        <p class="meta">📍 {item['org']} &nbsp;·&nbsp; 공포 {item['date']} &nbsp;·&nbsp; 시행 {item['enforce_date']}</p>
+                        <h4>{name_html}</h4>
+                        <p>
+                            <span style="color:#64ffda; font-size:0.82rem;">{item['type']}</span>
+                            &nbsp;&nbsp;🤖 <span style="color:#8892b0; font-size:0.85rem;">Claude AI 분석 예정</span>
+                        </p>
+                    </div>""",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.info(f"'{law_query}'에 대한 검색 결과가 없습니다. 다른 검색어를 시도해보세요.")
+
+        # Claude AI 분석 예정 안내
+        st.markdown(
+            """<div class="coming-card">
+                <h4>🤖 Claude AI 분석 연동 예정</h4>
+                <p>조례 원문을 Claude AI가 읽고 핵심 규제 항목을 자동 요약합니다.</p>
+                <ul>
+                    <li>이격거리 기준 (태양광·풍력 — 민가, 도로, 하천 거리)</li>
+                    <li>소음 기준 (dB 수치 및 측정 조건)</li>
+                    <li>농지·산지 전용 허가 조건</li>
+                    <li>인허가 절차 및 처리 기간</li>
+                </ul>
+                <p style="margin-top:0.6rem;">✅ 준비 사항: <code>.env</code>에 <code>ANTHROPIC_API_KEY</code> 설정</p>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
+    else:
+        # 초기 상태: 검색 예시 안내
+        st.markdown(
+            """<div class="coming-card">
+                <h4>🔍 검색어를 입력하고 조회하세요</h4>
+                <ul>
+                    <li><b>태양광 이격거리</b> — 지자체별 태양광 설치 이격거리 기준 조례</li>
+                    <li><b>풍력 소음</b> — 풍력발전 소음 기준 관련 조례</li>
+                    <li><b>ESS 안전</b> — ESS 설치 안전 관리 조례</li>
+                    <li><b>공유수면 해상풍력</b> — 해상풍력 공유수면 관련 조례</li>
+                    <li><b>농지 태양광</b> — 농지 전용 및 영농형 태양광 관련 조례</li>
+                </ul>
+                <p style="margin-top:0.6rem;">🤖 Claude AI 분석 기능은 <code>ANTHROPIC_API_KEY</code> 설정 후 추가 예정</p>
             </div>""",
             unsafe_allow_html=True,
         )
