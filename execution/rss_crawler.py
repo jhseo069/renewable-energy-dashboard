@@ -343,8 +343,14 @@ def fetch_rss_articles(
     collected_articles.sort(key=lambda x: x["date"], reverse=True)
 
     # 첨부파일 수집 (병렬 HTTP 요청)
+    # 최상위 try/except: 첨부파일 수집 전체 실패해도 기사 목록은 반드시 반환
     if fetch_attachments:
-        collected_articles = _enrich_with_attachments(collected_articles)
+        try:
+            collected_articles = _enrich_with_attachments(collected_articles)
+        except Exception as e:
+            print(f"[첨부파일] 전체 수집 실패: {e} → 첨부파일 없이 기사 반환")
+            for a in collected_articles:
+                a.setdefault("attachments", [])
 
     return collected_articles
 

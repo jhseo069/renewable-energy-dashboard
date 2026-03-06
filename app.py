@@ -80,8 +80,22 @@ def _fetch_all_keyword_news(keywords: tuple) -> dict:
 # ── 정책/입법 동향 캐시 함수 ──────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_policy_rss() -> list[dict]:
-    """부처 보도자료 RSS 수집 (1시간 캐시). 실패 시 Dummy 반환."""
-    return fetch_rss_articles(filter_energy=True)
+    """부처 보도자료 RSS 수집 (1시간 캐시). 실패 시 Dummy 반환.
+    첨부파일 수집은 별도 캐시 함수에서 처리 — RSS 기사 수집과 분리해 Cloud 타임아웃 방지.
+    """
+    return fetch_rss_articles(filter_energy=True, fetch_attachments=False)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_attachments_cached(link: str) -> list[dict]:
+    """단일 보도자료 링크의 첨부파일 목록 캐시 (1시간).
+    기사 카드 렌더링 시 개별 호출 — 실패 시 빈 리스트 반환.
+    """
+    from rss_crawler import _fetch_attachments
+    try:
+        return _fetch_attachments(link)
+    except Exception:
+        return []
 
 
 @st.cache_data(ttl=21600, show_spinner=False)
@@ -765,8 +779,8 @@ with tab3:
                                     unsafe_allow_html=True,
                                 )
                             else:
-                                # 첨부파일 링크 HTML 생성
-                                attachments = article.get("attachments", [])
+                                # 첨부파일: 개별 캐시 함수로 분리 호출 (RSS 수집과 독립)
+                                attachments = _fetch_attachments_cached(article["link"])
                                 att_html = ""
                                 if attachments:
                                     att_links = " &nbsp;|&nbsp; ".join(
