@@ -97,6 +97,14 @@ def search_ordinances(query: str, display: int = 20, page: int = 1) -> dict:
     resp.raise_for_status()
     data = resp.json()
 
+    # IP 미등록 오류 감지
+    # law.go.kr는 미등록 IP에서 호출 시 HTTP 200이지만 "result" 키로 오류 메시지를 반환
+    if "result" in data:
+        raise ValueError(
+            f"법령 API 접근 오류: {data.get('result', '')} "
+            "— 국가법령정보 공동활용 사이트에서 이 서버의 IP/도메인을 등록해주세요."
+        )
+
     # 실제 응답 루트 키: "OrdinSearch"
     root  = data.get("OrdinSearch", {})
     total = int(root.get("totalCnt", 0))
