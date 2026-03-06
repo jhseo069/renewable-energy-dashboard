@@ -96,6 +96,19 @@ ASSEMBLY_API_KEY=                          # 국회 오픈 API (미발급 → Mo
 - **에너지 키워드 필터**: 제목(title)만 체크, 요약(summary) 미사용. 광범위 키워드(에너지·해상·발전·전력·허가·온실가스) 제거하고 신재생 특화 키워드만 유지.
 - **필터 적용 후 0건**: Dummy 카드 표시 안 함 (RSS 연결 실패 시에만 Dummy 표시)
 - **UI 개선 사항 완료 (2026-03-06)**: Tab 3 RSS expander 내부에 `st.container(height=400)` 적용하여 모든 기사 스크롤 확인 가능.
+- **첨부파일 직접 다운로드 완료 (2026-03-06)**: `_fetch_attachments()` + `_enrich_with_attachments()` 구현.
+  - korea.kr 통합 플랫폼 → 부처 무관 동일 HTML 구조 (`div.filedown`)
+  - 반환값에 `attachments: [{"name": "파일명.hwp", "url": "다운로드URL"}]` 추가
+  - app.py Tab 3 카드 하단에 📎 파일명 클릭 → 직접 다운로드 링크 표시
+  - `_fetch_policy_rss`는 `fetch_attachments=False`로 호출 → Cloud 타임아웃 방지
+  - 첨부파일은 `_fetch_attachments_cached(link)` 카드별 개별 캐시 함수로 분리
+- **날짜 필터 버그 수정 (2026-03-06)**: `_safe_parse_dt`가 `"%Y-%m-%d %H:%M"` 형식만 지원하여 RSS 기사(`"%Y-%m-%d"` 형식)가 전부 필터 탈락하는 버그 수정.
+  - 수정 후: `"%Y-%m-%d %H:%M"` → `"%Y-%m-%d"` 순서로 두 형식 모두 지원
+- **기간 필터 추가 (2026-03-06, Gemini)**: Tab 3에 기간 선택 드롭다운 추가 (최근 2일/1주일/1개월/1년/전체). `_filter_by_period()` 함수 공유.
+- **첨부파일 뱃지 UI 개선 (2026-03-06, Gemini)**: 기존 텍스트 링크였던 첨부파일 다운로드 링크를 Chip/Badge 형태의 세련된 UI로 변경.
+- **CSV 엑셀 다운로드에 첨부파일 링크 포함 (2026-03-06, Gemini)**: Tab 3 보도자료 엑셀 다운로드 시 `_fetch_attachments_cached`를 재활용하여 엑셀 내부에 '첨부파일' 칼럼 추가(파일명 및 URL 포함).
+- **Tab 2 뉴스 결과 스크롤 개선 (2026-03-06, Gemini)**: Tab 3과 동일하게 Tab 2의 각 키워드별 expander 내부에도 `st.container(height=400)`를 적용하여 리스트가 길어지지 않고 스크롤되도록 수정.
+- **최신 커밋**: `263a1e0` (feat: Tab 3 UI Polish (Attachment Badges, CSV Include Attachments))
 
 ### Tab 4: 📡 유관기관 공지사항
 - **상태:** UI 레이아웃 완성, 크롤러 미구현 (Coming Soon)
