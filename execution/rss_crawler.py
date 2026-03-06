@@ -47,21 +47,38 @@ RSS_SOURCES = [
     },
 ]
 
-# ── 에너지 관련 키워드 필터 ────────────────────────────────────────────
-# 부처 보도자료 중 신재생 사업과 무관한 일반 행정·복지·인사 기사를 제거하기 위함.
-# 제목 또는 요약에 아래 키워드 중 하나라도 포함되면 포함.
-ENERGY_KEYWORDS = [
-    "풍력", "태양광", "신재생", "재생에너지", "ESS", "에너지",
-    "해상", "계통", "RPS", "REC", "수소", "발전", "전력",
-    "탄소중립", "온실가스", "허가", "인허가", "산지전용",
-    "집적화단지", "공유수면", "PPA", "분산에너지",
+# ── 신재생 사업개발 핵심 키워드 (제목 전용 필터) ────────────────────────
+# 제목에만 적용하는 이유:
+#   요약(summary)은 관련 없는 기사도 "에너지", "발전", "해상" 등을 포함할 수 있어
+#   노이즈가 심함. 제목에 키워드가 없으면 신재생 사업과 직접 관련이 없는 기사.
+#
+# 제외한 광범위 키워드 (노이즈 원인):
+#   "에너지" — 에너지음료, 에너지절약 등도 포함됨
+#   "해상"   — 해상관광, 해상물류, 해상안전 등도 포함됨
+#   "발전"   — 경제발전, 기술발전, 조직발전 등도 포함됨
+#   "전력"   — 군사전력, 경찰전력 등도 포함됨
+#   "허가"   — 각종 영업허가, 식품허가 등 모든 행정허가 포함됨
+#   "온실가스"— 기후부 전반 기사 포함, 신재생 직접 관련성 낮음
+ENERGY_KEYWORDS_TITLE = [
+    # 발전원 (명확하게 신재생만 지칭)
+    "풍력", "태양광", "신재생", "재생에너지", "ESS", "BESS",
+    # 인허가·계통 관련 (신재생 특화 용어)
+    "계통", "RPS", "REC", "PPA", "집적화단지", "공유수면", "산지전용",
+    # 수소·분산에너지
+    "수소", "분산에너지",
+    # 탄소중립 (신재생 정책 직결)
+    "탄소중립",
+    # 해상풍력 특화
+    "WTIV", "해상풍력", "어업인",
 ]
 
 
-def _is_energy_related(title: str, summary: str) -> bool:
-    """제목 또는 요약에 에너지 관련 키워드가 포함되어 있으면 True 반환"""
-    combined_text = title + " " + summary
-    return any(keyword in combined_text for keyword in ENERGY_KEYWORDS)
+def _is_energy_related(title: str) -> bool:
+    """
+    제목에 신재생 사업개발 핵심 키워드가 포함되면 True 반환.
+    요약은 검사하지 않음 — 요약의 광범위한 키워드 매칭이 노이즈의 주원인.
+    """
+    return any(keyword in title for keyword in ENERGY_KEYWORDS_TITLE)
 
 
 def _parse_date_safe(pub_date_str: str) -> str:
@@ -147,17 +164,15 @@ def fetch_rss_articles(filter_energy: bool = True) -> list[dict]:
                 }
 
                 # 에너지 키워드 필터 적용
-                if filter_energy and not _is_energy_related(title, summary):
+                if filter_energy and not _is_energy_related(title):
                     continue
 
                 dept_articles.append(article)
 
-            # 부처별로 기사를 모았는데 0건이면 Dummy 추가
-            # (RSS는 연결됐지만 해당 부처 기사가 없는 경우 대비)
-            if not dept_articles:
-                collected_articles.extend(_make_dummy_articles(source["short"]))
-            else:
-                collected_articles.extend(dept_articles)
+            # RSS는 정상 연결됐지만 에너지 관련 기사가 없으면 → 그냥 skip
+            # (Dummy 카드를 "연결 준비 중"으로 표시하면 사용자가 오해할 수 있음)
+            # Dummy는 RSS 연결 자체가 실패했을 때만 표시 (아래 except에서 처리)
+            collected_articles.extend(dept_articles)
 
         except Exception as e:
             # 부처 하나 실패가 전체 수집을 중단시키면 안 됨 → 개별 처리
