@@ -11,9 +11,18 @@ Layer 3 (Execution) — 결정론적 Python 스크립트
 RSS 출처: 대한민국 정책브리핑 부처별 RSS (korea.kr)
   - 인증 불필요 (공개 API)
   - 수집 실패 시 Dummy 데이터 반환 → 앱이 멈추지 않도록 설계
+
+첨부파일 수집:
+  - korea.kr의 모든 부처 보도자료는 동일한 HTML 구조 사용 (통합 플랫폼)
+  - 첨부파일 섹션: div.filedown > dl > dd > span > a
+  - 다운로드 URL 형식: https://www.korea.kr/common/download.do?fileId=...
+  - 병렬 HTTP 요청(ThreadPoolExecutor)으로 성능 최적화
 """
 
 import feedparser
+import requests
+from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 
@@ -72,6 +81,22 @@ ENERGY_KEYWORDS_TITLE = [
     "WTIV", "해상풍력", "어업인",
 ]
 
+# ── HTTP 요청 공통 헤더 ────────────────────────────────────────────────
+# korea.kr은 User-Agent 없으면 접근 차단할 수 있으므로 브라우저처럼 위장
+_HTTP_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    )
+}
+
+# ── 첨부파일 수집 설정 ────────────────────────────────────────────────
+# 병렬 요청 최대 스레드 수 — 너무 많으면 서버 부하, 너무 적으면 느림
+_MAX_WORKERS = 5
+# 개별 페이지 요청 타임아웃 (초)
+_PAGE_TIMEOUT = 8
+
 
 def _is_energy_related(title: str) -> bool:
     """
@@ -109,21 +134,155 @@ def _make_dummy_articles(dept_short: str) -> list[dict]:
                 "(directives/policy_tracking_sop.md 참고)"
             ),
             "link": "https://www.korea.kr/briefing/pressReleaseList.do",
+            "attachments": [],
             "is_dummy": True,
         }
     ]
 
 
-def fetch_rss_articles(filter_energy: bool = True) -> list[dict]:
+def _fetch_attachments(article_url: str) -> list[dict]:
+    """
+    보도자료 원문 페이지에서 첨부파일 목록을 추출합니다.
+
+    korea.kr 통합 플랫폼 기준 (모든 부처 동일 구조):
+      - 첨부파일 섹션: <div class="filedown"> > <dl> > <dd> > <span> > <a>
+      - 다운로드 링크: href="/common/download.do?fileId=...&tblKey=GMN"
+      - 뷰어 링크(class="view")는 제외하고 실제 다운로드 링크만 추출
+
+    Args:
+        article_url: korea.kr 보도자료 상세 페이지 URL
+
+    Returns:
+        [{"name": "파일명.hwp", "url": "https://www.korea.kr/common/download.do?..."}]
+        실패 또는 첨부파일 없으면 빈 리스트 반환
+    """
+    try:
+        resp = requests.get(
+            article_url,
+            headers=_HTTP_HEADERS,
+            timeout=_PAGE_TIMEOUT,
+        )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        attachments: list[dict] = []
+
+        # korea.kr 첨부파일 섹션: div.filedown 아래 모든 a 태그 순회
+        filedown_div = soup.find("div", class_="filedown")
+        if not filedown_div:
+            # 첨부파일 섹션 자체가 없는 보도자료 → 빈 리스트 정상 반환
+            return []
+
+        seen_file_ids: set[str] = set()  # fileId 기준 중복 방지
+
+        for a_tag in filedown_div.find_all("a", href=True):
+            href = a_tag.get("href", "")
+            tag_class = a_tag.get("class", [])
+
+            # 뷰어 링크(docViewer, class="view") 제외
+            if "docViewer" in href or "view" in tag_class:
+                continue
+
+            # "내려받기" 버튼(class="down") 제외 — 파일명 링크와 URL이 동일한 중복 버튼
+            if "down" in tag_class:
+                continue
+
+            # 실제 다운로드 링크만 포함
+            if "/common/download.do" not in href:
+                continue
+
+            # fileId 기준 중복 제거 (같은 파일이 여러 a 태그로 표시되는 경우 방어)
+            file_id = href.split("fileId=")[-1].split("&")[0] if "fileId=" in href else href
+            if file_id in seen_file_ids:
+                continue
+            seen_file_ids.add(file_id)
+
+            # 파일명: a 태그 텍스트에서 이미지 alt 텍스트 제외하고 추출
+            file_name = a_tag.get_text(separator=" ", strip=True)
+            # img alt 텍스트(예: "한글파일", "PDF") 제거 — 파일명만 남김
+            for img in a_tag.find_all("img"):
+                alt_text = img.get("alt", "")
+                file_name = file_name.replace(alt_text, "").strip()
+
+            # 상대 경로 → 절대 URL 변환
+            full_url = "https://www.korea.kr" + href if href.startswith("/") else href
+
+            if file_name:
+                attachments.append({"name": file_name, "url": full_url})
+
+        return attachments
+
+    except Exception as e:
+        # 개별 페이지 요청 실패는 전체 수집을 중단시키지 않음
+        print(f"[첨부파일] 수집 실패 ({article_url[:60]}...): {e}")
+        return []
+
+
+def _enrich_with_attachments(articles: list[dict]) -> list[dict]:
+    """
+    기사 목록에 첨부파일 정보를 병렬로 추가합니다.
+
+    ThreadPoolExecutor 사용 이유:
+      - 기사 1건당 HTTP 요청 1개 → 순차 처리 시 10건 × 2초 = 20초 지연
+      - 병렬 처리 시 MAX_WORKERS=5 기준 → 10건도 2~3초 이내 완료
+      - I/O bound 작업이므로 Thread 방식이 적합 (GIL 문제 없음)
+
+    Args:
+        articles: fetch_rss_articles()가 반환한 기사 리스트 (is_dummy=False만 처리)
+
+    Returns:
+        attachments 키가 추가된 기사 리스트 (순서 보존)
+    """
+    # Dummy 기사는 HTTP 요청 불필요 → 빈 attachments 설정 후 제외
+    real_articles = [a for a in articles if not a.get("is_dummy")]
+    dummy_articles = [a for a in articles if a.get("is_dummy")]
+    for dummy in dummy_articles:
+        dummy.setdefault("attachments", [])
+
+    if not real_articles:
+        return articles
+
+    # 링크 → 기사 매핑 (병렬 결과를 원래 순서에 맞게 삽입하기 위해)
+    link_to_article = {a["link"]: a for a in real_articles}
+
+    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
+        # 링크별로 future 생성
+        future_to_link = {
+            executor.submit(_fetch_attachments, link): link
+            for link in link_to_article
+        }
+
+        for future in as_completed(future_to_link):
+            link = future_to_link[future]
+            try:
+                attachments = future.result()
+            except Exception:
+                attachments = []
+            link_to_article[link]["attachments"] = attachments
+
+    # attachments 키가 설정 안 된 기사 방어 처리 (타임아웃 등)
+    for article in real_articles:
+        article.setdefault("attachments", [])
+
+    return articles
+
+
+def fetch_rss_articles(
+    filter_energy: bool = True,
+    fetch_attachments: bool = True,
+) -> list[dict]:
     """
     등록된 부처 RSS를 순회하며 보도자료를 수집합니다.
 
     Args:
         filter_energy: True이면 에너지 관련 키워드 포함 기사만 반환.
                        False이면 부처 필터만 적용 (전체 보도자료).
+        fetch_attachments: True이면 각 기사의 첨부파일 목록을 함께 수집.
+                           False이면 attachments=[] 로 설정하고 HTTP 요청 생략.
 
     Returns:
-        [{date, source, title, summary, link, is_dummy}, ...] 최신순 정렬
+        [{date, source, title, summary, link, attachments, is_dummy}, ...] 최신순 정렬
+        attachments: [{"name": "파일명.hwp", "url": "다운로드URL"}, ...]
     """
     collected_articles: list[dict] = []
 
@@ -160,6 +319,7 @@ def fetch_rss_articles(filter_energy: bool = True) -> list[dict]:
                     "title": title,
                     "summary": summary,
                     "link": link,
+                    "attachments": [],  # _enrich_with_attachments에서 채워짐
                     "is_dummy": False,
                 }
 
@@ -181,21 +341,34 @@ def fetch_rss_articles(filter_energy: bool = True) -> list[dict]:
 
     # 최신순 정렬 (날짜 문자열이 YYYY-MM-DD 형식이므로 문자열 정렬로 충분)
     collected_articles.sort(key=lambda x: x["date"], reverse=True)
+
+    # 첨부파일 수집 (병렬 HTTP 요청)
+    if fetch_attachments:
+        collected_articles = _enrich_with_attachments(collected_articles)
+
     return collected_articles
 
 
 # ── 단독 실행 시 테스트 ────────────────────────────────────────────────
 if __name__ == "__main__":
     print("=" * 60)
-    print("정부 부처 보도자료 RSS 수집 테스트")
+    print("정부 부처 보도자료 RSS 수집 + 첨부파일 테스트")
     print("=" * 60)
 
-    articles = fetch_rss_articles(filter_energy=True)
+    articles = fetch_rss_articles(filter_energy=True, fetch_attachments=True)
     print(f"\n수집된 기사 수: {len(articles)}건\n")
 
     for i, article in enumerate(articles[:10], 1):
         dummy_mark = " [DUMMY]" if article["is_dummy"] else ""
         print(f"[{i}] {article['date']} | {article['source']}{dummy_mark}")
-        print(f"     제목: {article['title'][:60]}...")
+        print(f"     제목: {article['title'][:60]}")
         print(f"     링크: {article['link']}")
+        attachments = article.get("attachments", [])
+        if attachments:
+            print(f"     첨부파일 {len(attachments)}건:")
+            for att in attachments:
+                print(f"       - {att['name'][:50]}")
+                print(f"         {att['url']}")
+        else:
+            print("     첨부파일: 없음")
         print()

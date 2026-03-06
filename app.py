@@ -765,6 +765,18 @@ with tab3:
                                     unsafe_allow_html=True,
                                 )
                             else:
+                                # 첨부파일 링크 HTML 생성
+                                attachments = article.get("attachments", [])
+                                att_html = ""
+                                if attachments:
+                                    att_links = " &nbsp;|&nbsp; ".join(
+                                        f'<a href="{att["url"]}" target="_blank" '
+                                        f'style="color:#00c9ff; font-size:0.78rem;">'
+                                        f'📎 {att["name"][:40]}</a>'
+                                        for att in attachments
+                                    )
+                                    att_html = f'<p style="margin-top:0.3rem;">{att_links}</p>'
+
                                 st.markdown(
                                     f"""<div class="card" style="margin-bottom:0.5rem;">
                                         <p class="meta">🏢 {article['source']} · {article['date']}</p>
@@ -773,6 +785,7 @@ with tab3:
                                                style="color:#ccd6f6; text-decoration:none;">{article['title']}</a>
                                         </h4>
                                         <p>{article['summary'][:120]}…</p>
+                                        {att_html}
                                     </div>""",
                                     unsafe_allow_html=True,
                                 )
