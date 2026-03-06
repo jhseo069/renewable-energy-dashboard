@@ -1,9 +1,30 @@
 """
 국가법령정보센터 자치법규(조례) 검색 API 연동
 ================================================
-- 신재생에너지 관련 지자체 조례 키워드 검색
 - API 엔드포인트: https://www.law.go.kr/DRF/lawSearch.do
 - 인증: OC 파라미터에 API 키 전달 (무료 발급)
+
+[실제 응답 구조 - 2026-03-06 확인]
+{
+  "OrdinSearch": {
+    "totalCnt": "18",          ← 전체 건수
+    "law": [ ... ] or { ... }  ← 단건이면 dict, 다건이면 list
+  }
+}
+
+[각 법규 항목 필드]
+  "자치법규명"        ← 조례 이름
+  "지자체기관명"      ← 지자체명 (예: 전라남도, 신안군)
+  "자치법규종류"      ← 조례 / 규칙 등
+  "공포일자"          ← YYYYMMDD
+  "시행일자"          ← YYYYMMDD
+  "자치법규일련번호"  ← 상세페이지 URL 구성에 사용
+  "자치법규상세링크"  ← /DRF/lawService.do?... (HTML 원문)
+
+[검색 특성]
+  - section=ordinNm: 법규명(조례 이름)만 검색 (기본값)
+  - "이격거리", "소음" 같은 내용어는 결과 없음 → 법규명 키워드로 검색해야 함
+  - 권장 검색어: "태양광", "풍력", "ESS", "해상풍력", "신재생에너지" 등
 """
 
 import os
@@ -14,6 +35,7 @@ load_dotenv()
 
 LAW_API_KEY = os.getenv("LAW_API_KEY", "")
 _SEARCH_URL = "https://www.law.go.kr/DRF/lawSearch.do"
+_BASE_URL    = "https://www.law.go.kr"
 
 
 def _fmt_date(s: str) -> str:
@@ -25,25 +47,29 @@ def _fmt_date(s: str) -> str:
 
 def search_ordinances(query: str, display: int = 20, page: int = 1) -> dict:
     """
-    국가법령정보센터에서 자치법규(조례·규칙)를 키워드로 검색합니다.
+    국가법령정보센터에서 자치법규(조례·규칙)를 법규명으로 검색합니다.
+
+    ※ 법규명(조례 이름) 검색만 지원됩니다.
+       "이격거리", "소음" 등 내용어는 검색 불가 — 아래 권장 키워드 사용 권장:
+       "태양광", "풍력", "해상풍력", "ESS", "신재생에너지", "수소", "분산에너지"
 
     Args:
-        query:   검색어 (예: "태양광 이격거리", "풍력 소음 기준")
+        query:   검색어 (예: "태양광", "풍력발전", "해상풍력")
         display: 페이지당 결과 수 (최대 20)
         page:    페이지 번호 (1부터 시작)
 
     Returns:
         {
-            "total": int,       ← 전체 검색 건수
+            "total": int,
             "items": [
                 {
-                    "name":         str,  ← 법규명
-                    "org":          str,  ← 자치단체명
+                    "name":         str,  ← 자치법규명
+                    "org":          str,  ← 지자체기관명
                     "date":         str,  ← 공포일자 (YYYY-MM-DD)
                     "enforce_date": str,  ← 시행일자 (YYYY-MM-DD)
-                    "type":         str,  ← 법규유형 (조례/규칙 등)
-                    "law_id":       str,  ← 법규ID (상세 링크 구성에 사용)
-                    "link":         str,  ← 국가법령정보센터 상세 페이지 URL
+                    "type":         str,  ← 자치법규종류 (조례/규칙)
+                    "mst":          str,  ← 일련번호 (상세 링크용)
+                    "link":         str,  ← 국가법령정보센터 상세 HTML URL
                 },
                 ...
             ]
@@ -60,7 +86,7 @@ def search_ordinances(query: str, display: int = 20, page: int = 1) -> dict:
         _SEARCH_URL,
         params={
             "OC":      LAW_API_KEY,
-            "target":  "ordin",   # 자치법규(조례·규칙) 검색 대상
+            "target":  "ordin",   # 자치법규(조례·규칙) 검색
             "query":   query,
             "type":    "JSON",
             "display": display,
@@ -71,27 +97,30 @@ def search_ordinances(query: str, display: int = 20, page: int = 1) -> dict:
     resp.raise_for_status()
     data = resp.json()
 
-    # API 응답 루트 키: "자치법규" 또는 "법령" (버전에 따라 다를 수 있음)
-    root = data.get("자치법규") or data.get("법령") or {}
-    total = int(root.get("@현재총건수", 0))
+    # 실제 응답 루트 키: "OrdinSearch"
+    root  = data.get("OrdinSearch", {})
+    total = int(root.get("totalCnt", 0))
 
-    # 단건 결과는 dict, 다건 결과는 list로 옴 → 항상 list로 정규화
-    raw = root.get("자치법규") or root.get("법령") or []
+    # 단건(dict)과 다건(list) 모두 list로 정규화
+    raw = root.get("law", [])
     if isinstance(raw, dict):
         raw = [raw]
 
     items = []
     for item in raw:
-        law_id = item.get("법규ID", "")
+        mst        = item.get("자치법규일련번호", "")
+        detail_rel = item.get("자치법규상세링크", "")
+        # 원문 HTML 링크: 상대경로 → 절대 URL
+        link = (_BASE_URL + detail_rel) if detail_rel.startswith("/") else detail_rel
+
         items.append({
-            "name":         item.get("법규명", ""),
-            "org":          item.get("자치단체명", ""),
+            "name":         item.get("자치법규명", ""),
+            "org":          item.get("지자체기관명", ""),
             "date":         _fmt_date(item.get("공포일자", "")),
             "enforce_date": _fmt_date(item.get("시행일자", "")),
-            "type":         item.get("법규유형", "조례"),
-            "law_id":       law_id,
-            # 자치법규 상세 페이지 URL (법규ID 기반)
-            "link": f"https://www.law.go.kr/ordinInfoP.do?ordinSeq={law_id}" if law_id else "",
+            "type":         item.get("자치법규종류", "조례"),
+            "mst":          mst,
+            "link":         link,
         })
 
     return {"total": total, "items": items}

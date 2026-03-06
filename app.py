@@ -365,7 +365,7 @@ with tab1:
     with col_q:
         search_query = st.text_input(
             "검색어",
-            placeholder="예: 태양광 이격거리, 풍력 소음 기준, 농지 전용 …",
+            placeholder="예: 태양광, 풍력발전, 해상풍력, ESS, 신재생에너지 …  (조례 이름으로 검색)",
             label_visibility="collapsed",
         )
     with col_btn:
@@ -435,7 +435,10 @@ with tab1:
                     unsafe_allow_html=True,
                 )
         else:
-            st.info(f"'{law_query}'에 대한 검색 결과가 없습니다. 다른 검색어를 시도해보세요.")
+            st.info(
+                f"'{law_query}'에 대한 검색 결과가 없습니다. "
+                "이 API는 조례 이름으로만 검색됩니다 — '태양광', '풍력발전', '해상풍력' 등으로 시도해보세요."
+            )
 
         # Claude AI 분석 예정 안내
         st.markdown(
@@ -454,18 +457,22 @@ with tab1:
         )
 
     else:
-        # 초기 상태: 검색 예시 안내
+        # 초기 상태: 검색 방법 안내
         st.markdown(
             """<div class="coming-card">
-                <h4>🔍 검색어를 입력하고 조회하세요</h4>
+                <h4>🔍 조례 이름 키워드로 검색하세요</h4>
+                <p style="color:#ffc837; font-size:0.85rem; margin-bottom:0.6rem;">
+                    ⚠️ 이 API는 <b>조례 이름(법규명)</b>으로만 검색됩니다.
+                    "이격거리", "소음" 같은 내용어는 검색 불가합니다.
+                </p>
                 <ul>
-                    <li><b>태양광 이격거리</b> — 지자체별 태양광 설치 이격거리 기준 조례</li>
-                    <li><b>풍력 소음</b> — 풍력발전 소음 기준 관련 조례</li>
-                    <li><b>ESS 안전</b> — ESS 설치 안전 관리 조례</li>
-                    <li><b>공유수면 해상풍력</b> — 해상풍력 공유수면 관련 조례</li>
-                    <li><b>농지 태양광</b> — 농지 전용 및 영농형 태양광 관련 조례</li>
+                    <li><b>태양광</b> — 전국 태양광 관련 지자체 조례 (약 18건+)</li>
+                    <li><b>풍력발전</b> — 풍력발전 설치·관리 조례</li>
+                    <li><b>해상풍력</b> — 해상풍력 관련 조례</li>
+                    <li><b>신재생에너지</b> — 신재생에너지 관련 조례</li>
+                    <li><b>에너지저장장치</b> — ESS 설치 안전 관련 조례</li>
                 </ul>
-                <p style="margin-top:0.6rem;">🤖 Claude AI 분석 기능은 <code>ANTHROPIC_API_KEY</code> 설정 후 추가 예정</p>
+                <p style="margin-top:0.6rem;">🤖 조례 원문 Claude AI 분석은 <code>ANTHROPIC_API_KEY</code> 설정 후 추가 예정</p>
             </div>""",
             unsafe_allow_html=True,
         )
