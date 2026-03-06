@@ -599,16 +599,17 @@ with tab2:
 
             with st.expander(f"{icon} {display_name}  ({len(kw_news)}건)"):
                 if kw_news:
-                    for item in kw_news:
-                        st.markdown(
-                            f"""<div class="card">
-                                <p class="meta">🏢 {item['source']} &nbsp;·&nbsp; {item['date']}</p>
-                                <h4><a href="{item['link']}" target="_blank"
-                                    style="color:#ccd6f6; text-decoration:none;">{item['title']}</a></h4>
-                                <p>{item['summary']}</p>
-                            </div>""",
-                            unsafe_allow_html=True,
-                        )
+                    with st.container(height=400):
+                        for item in kw_news:
+                            st.markdown(
+                                f"""<div class="card">
+                                    <p class="meta">🏢 {item['source']} &nbsp;·&nbsp; {item['date']}</p>
+                                    <h4><a href="{item['link']}" target="_blank"
+                                        style="color:#ccd6f6; text-decoration:none;">{item['title']}</a></h4>
+                                    <p>{item['summary']}</p>
+                                </div>""",
+                                unsafe_allow_html=True,
+                            )
                 else:
                     st.markdown(
                         "<p style='color:#8892b0; font-size:0.9rem; padding:0.5rem 0;'>"
@@ -682,13 +683,21 @@ with tab3:
         unsafe_allow_html=True,
     )
 
-    # 갱신 버튼
-    col_pol_refresh, col_pol_info = st.columns([1, 4])
+    # 갱신 버튼 및 기간 필터
+    col_pol_refresh, col_pol_period, col_pol_info = st.columns([1, 2, 2])
     with col_pol_refresh:
         if st.button("🔄 갱신", key="policy_refresh", use_container_width=True,
                      help="RSS·법안 캐시를 초기화하고 최신 데이터를 다시 수집합니다."):
             st.cache_data.clear()
             st.rerun()
+    with col_pol_period:
+        policy_period = st.selectbox(
+            "보도자료 수집 범위",
+            options=["최근 2일(어제~오늘)", "1주일", "1개월", "1년", "전체"],
+            index=0,
+            label_visibility="collapsed",
+            key="policy_period"
+        )
     with col_pol_info:
         st.markdown(
             "<p style='color:#8892b0; font-size:0.82rem; margin-top:0.5rem;'>"
@@ -707,9 +716,25 @@ with tab3:
         st.markdown('<p class="section-title">📢 유관 부처 보도자료 (RSS)</p>', unsafe_allow_html=True)
 
         with st.spinner("보도자료 수집 중…"):
-            rss_articles = _fetch_policy_rss()
+            raw_rss_articles = _fetch_policy_rss()
+            # 기간 필터 적용
+            rss_articles = _filter_by_period(raw_rss_articles, policy_period)
 
         if rss_articles:
+            # 보도자료 다운로드 버튼 추가
+            dl_df = pd.DataFrame(rss_articles)
+            if not dl_df.empty:
+                dl_df.rename(columns={"date": "날짜", "source": "부처", "title": "제목", "summary": "요약", "link": "링크"}, inplace=True)
+                dl_df = dl_df[["날짜", "부처", "제목", "요약", "링크"]]
+                today_str = datetime.today().strftime("%Y-%m-%d")
+                st.download_button(
+                    label="📥 현재 보도자료 엑셀(CSV) 다운로드",
+                    data=to_csv_bytes(dl_df),
+                    file_name=f"{today_str}_보도자료.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            
             # 부처별로 그룹핑해서 Expander로 표시
             dept_groups: dict[str, list] = {}
             for article in rss_articles:
