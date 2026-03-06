@@ -32,10 +32,14 @@ _PERIOD_DELTA = {
 
 
 def _safe_parse_dt(date_str: str) -> datetime:
-    try:
-        return datetime.strptime(date_str, "%Y-%m-%d %H:%M")
-    except Exception:
-        return datetime.min
+    # 뉴스 크롤러: "2026-03-06 14:30" 형식 (날짜+시간)
+    # RSS 크롤러:  "2026-03-06" 형식 (날짜만) → 두 형식 모두 지원
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(date_str, fmt)
+        except Exception:
+            continue
+    return datetime.min
 
 
 def _filter_by_period(items: list, period: str) -> list:
