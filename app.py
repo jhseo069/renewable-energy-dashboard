@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 from utils.news_crawler import search_naver_news, save_to_archive, to_csv_bytes
-from utils.law_api import search_ordinances
+from utils.law_api import search_ordinances, get_server_ip
 
 # execution/ 디렉토리를 Python 경로에 추가
 # app.py와 같은 레벨의 execution/ 폴더에서 스크립트를 import하기 위함
@@ -380,6 +380,13 @@ with tab1:
                 st.session_state["law_search_query"] = search_query
             except ValueError as e:
                 st.error(f"🔑 {e}")
+                # 현재 서버 IP를 표시하여 law.go.kr에 추가 등록할 수 있도록 안내
+                server_ip = get_server_ip()
+                st.info(
+                    f"**현재 서버 IP: `{server_ip}`**\n\n"
+                    "국가법령정보 공동활용 사이트 → OPEN API → OPEN API 신청 → "
+                    "해당 항목 수정에서 위 IP를 도메인주소란에 추가로 등록해 주세요."
+                )
                 st.session_state.pop("law_search_result", None)
             except Exception as e:
                 st.error(f"❌ 조례 검색 오류: {e}")

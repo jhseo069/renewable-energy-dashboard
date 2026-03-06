@@ -37,6 +37,23 @@ LAW_API_KEY = os.getenv("LAW_API_KEY", "")
 _SEARCH_URL = "https://www.law.go.kr/DRF/lawSearch.do"
 _BASE_URL    = "https://www.law.go.kr"
 
+# Streamlit Cloud 도메인 — law.go.kr Referer 체크 대응
+_STREAMLIT_DOMAIN = "https://renewable-energy-dashboard-nsmgneobdtz3xqpddasevz.streamlit.app/"
+_REQUEST_HEADERS  = {
+    "Referer":    _STREAMLIT_DOMAIN,
+    "Origin":     _STREAMLIT_DOMAIN.rstrip("/"),
+    "User-Agent": "Mozilla/5.0 (compatible; KCHRenewableEnergyDashboard/1.0)",
+}
+
+
+def get_server_ip() -> str:
+    """현재 서버의 외부 IP를 반환합니다. 실패 시 '확인불가' 반환."""
+    try:
+        resp = requests.get("https://api.ipify.org?format=json", timeout=5)
+        return resp.json().get("ip", "확인불가")
+    except Exception:
+        return "확인불가"
+
 
 def _fmt_date(s: str) -> str:
     """YYYYMMDD → YYYY-MM-DD 변환. 형식이 다르면 원본 반환."""
@@ -92,6 +109,7 @@ def search_ordinances(query: str, display: int = 20, page: int = 1) -> dict:
             "display": display,
             "page":    page,
         },
+        headers=_REQUEST_HEADERS,  # Referer/Origin 헤더로 도메인 인증 시도
         timeout=10,
     )
     resp.raise_for_status()
