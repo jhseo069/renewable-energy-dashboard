@@ -22,16 +22,39 @@ load_dotenv()
 ASSEMBLY_API_KEY = os.getenv("ASSEMBLY_API_KEY", "")
 ASSEMBLY_API_BASE = "https://open.assembly.go.kr/portal/openapi"
 
-# 추적 대상 법안 키워드 — 사업개발팀이 모니터링해야 할 핵심 법안 키워드
-# 해상풍력이 1순위, 그 외는 사업 환경 변화에 영향을 주는 법안들
+# 추적 대상 법안 검색 키워드 — API SEARCH_WORD 파라미터로 사용
+# 신재생에너지 사업개발(인허가·정책·기술기준) 직접 관련 법안만 모니터링
 BILL_KEYWORDS = [
-    "해상풍력",
+    # 에너지·발전 관련
     "신재생에너지",
     "재생에너지",
+    "해상풍력",
+    "태양광",
     "집적화단지",
     "분산에너지",
-    "탄소중립",
     "전기사업법",
+    "계획입지",
+    "에너지저장장치",
+    # 입지·토지 관련 (인허가 핵심)
+    "농지법",
+    "산지관리법",
+    "공유수면",
+    # 기후·환경 관련
+    "탄소중립",
+    "기후위기",
+    "온실가스",
+    "환경영향평가",
+]
+
+# 허용 소관위원회 — 신재생사업개발과 직접 관련 있는 위원회만 수집
+# 부분 문자열 매칭으로 위원회명 변경에 유연하게 대응
+ALLOWED_COMMITTEES = [
+    "산업통상자원",   # 산업통상자원중소벤처기업위원회
+    "농림축산",       # 농림축산식품해양수산위원회
+    "기후에너지",     # 기후에너지환경노동위원회
+    "기후위기",       # 기후위기특별위원회
+    "탄소중립",       # 탄소중립기후위기특별위원회
+    "환경노동",       # 환경노동위원회 (환경영향평가 등)
 ]
 
 # 법안 처리 상태 코드 → 한국어 매핑
@@ -148,12 +171,19 @@ def fetch_assembly_bills(keyword: str = "해상풍력") -> list[dict]:
 
         bills: list[dict] = []
         for row in rows:
+            committee = row.get("CURR_COMMITTEE", "")
+
+            # 소관위원회 필터 — ALLOWED_COMMITTEES 목록의 키워드를 하나라도 포함해야 통과
+            # 위원회명이 완전 일치하지 않아도 부분 포함으로 유연하게 매칭
+            if not any(kw in committee for kw in ALLOWED_COMMITTEES):
+                continue
+
             raw_status = row.get("PROC_RESULT_CD", "")
             bills.append({
                 "bill_id":      row.get("BILL_ID", ""),
                 "title":        row.get("BILL_NAME", ""),
                 "proposer":     row.get("PROPOSER", ""),
-                "committee":    row.get("CURR_COMMITTEE", ""),
+                "committee":    committee,
                 # 상태 코드를 읽기 쉬운 한국어로 변환
                 "status":       BILL_STATUS_MAP.get(raw_status, raw_status or "심사중"),
                 "propose_date": row.get("PROPOSE_DT", ""),
