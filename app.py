@@ -25,7 +25,7 @@ from law_api import fetch_all_bills
 load_dotenv()
 
 _PERIOD_DELTA = {
-    "최근 2일(어제~오늘)": timedelta(hours=48),
+    "최근 3일": timedelta(hours=72),
     "1주일": timedelta(weeks=1),
     "1개월": timedelta(days=30),
     "1년": timedelta(days=365),
@@ -47,7 +47,7 @@ def _filter_by_period(items: list, period: str) -> list:
     """기사 리스트를 선택 기간으로 필터링합니다."""
     if period == "전체":
         return items
-    cutoff = datetime.now() - _PERIOD_DELTA.get(period, timedelta(hours=48))
+    cutoff = datetime.now() - _PERIOD_DELTA.get(period, timedelta(hours=72))
     return [
         item for item in items
         if _safe_parse_dt(item.get("date", "")) >= cutoff
@@ -513,7 +513,7 @@ with tab2:
 
     period = st.radio(
         "🗓️ 조회 기간",
-        ["최근 2일(어제~오늘)", "1주일", "1개월", "1년", "전체"],
+        ["최근 3일", "1주일", "1개월", "1년", "전체"],
         horizontal=True,
         index=0,
         key="period_filter",
@@ -773,7 +773,7 @@ with tab3:
     with col_pol_period:
         policy_period = st.selectbox(
             "보도자료 수집 범위",
-            options=["최근 2일(어제~오늘)", "1주일", "1개월", "1년", "전체"],
+            options=["최근 3일", "1주일", "1개월", "1년", "전체"],
             index=0,
             label_visibility="collapsed",
             key="policy_period"
