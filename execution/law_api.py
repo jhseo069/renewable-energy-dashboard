@@ -190,10 +190,12 @@ def fetch_assembly_bills(keyword: str = "해상풍력") -> list[dict]:
 
         bills: list[dict] = []
         for row in rows:
-            committee = row.get("CURR_COMMITTEE", "")
+            # API가 CURR_COMMITTEE를 JSON null로 반환하면 Python None이 됨
+            # → or "" 로 None을 빈 문자열로 교체하여 TypeError 방지
+            committee = row.get("CURR_COMMITTEE") or ""
 
             # 소관위원회 필터 — ALLOWED_COMMITTEES 목록의 키워드를 하나라도 포함해야 통과
-            # 위원회명이 완전 일치하지 않아도 부분 포함으로 유연하게 매칭
+            # 위원회 미배정(빈 문자열) 법안은 자동 제외
             if not any(kw in committee for kw in ALLOWED_COMMITTEES):
                 continue
 
