@@ -1,8 +1,8 @@
 """
 신재생에너지 사업개발팀 - 사내 대시보드
 =============================================
-- Tab 1: 입지/규제 분석      (국가법령정보센터 API + Claude AI)
-- Tab 2: 일일 뉴스 모니터링   (네이버 뉴스 API)
+- Tab 1: 입지/규제 분석      (국가법령정보센터 API + Gemini AI)
+- Tab 2: 일일 뉴스 모니터링   (네이버 뉴스 API + Gemini AI)
 - Tab 3: 정책 및 입법 동향    (국회 API + 중앙부처 RSS)
 - Tab 4: 유관기관 공지사항    (한전, KPX, 지자체 크롤링)
 """
@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent / "execution"))
 from rss_crawler import fetch_rss_articles
 from law_api import fetch_all_bills
 from notice_crawler import fetch_all_notices
+from ai_analyzer import analyze_ordinance, analyze_news_trends
 
 load_dotenv()
 
@@ -311,7 +312,7 @@ with st.sidebar:
     st.markdown("**API 연동 현황**")
     api_status = [
         ("badge-ready",   "● 국가법령정보센터 API"),
-        ("badge-pending", "● Claude AI"),
+        ("badge-ready",   "● Gemini AI (요약 분석)"),
         ("badge-ready",   "● 네이버 뉴스 API"),
         ("badge-ready",   "● 국회 열린국회 API"),
         ("badge-ready",   "● 중앙부처 RSS"),
@@ -362,7 +363,7 @@ with tab1:
     st.markdown(
         "<p style='color:#8892b0;'>"
         "국가법령정보센터 API로 지자체 조례를 검색합니다. "
-        "Claude AI 자동 분석 기능은 <code>ANTHROPIC_API_KEY</code> 설정 후 추가 예정입니다."
+        "조례 검색 후 각 카드의 <b>🤖 Gemini AI 분석</b> 버튼으로 핵심 규제를 즉시 요약합니다."
         "</p>",
         unsafe_allow_html=True,
     )
@@ -407,7 +408,7 @@ with tab1:
     kpis = [
         ("🏛️", str(law_result["total"]) if law_result else "✅ 연동 완료", "검색된 조례 수"),
         ("📋", str(len(law_result["items"])) if law_result else "—", "현재 목록"),
-        ("🤖", "예정", "Claude AI 분석"),
+        ("🤖", "준비완료", "Gemini AI 분석"),
         ("⚠️", "—", "규제 알림"),
     ]
     for col, (icon, value, label) in zip(kpi_cols, kpis):
@@ -441,34 +442,40 @@ with tab1:
                     f"""<div class="card">
                         <p class="meta">📍 {item['org']} &nbsp;·&nbsp; 공포 {item['date']} &nbsp;·&nbsp; 시행 {item['enforce_date']}</p>
                         <h4>{name_html}</h4>
-                        <p>
-                            <span style="color:#64ffda; font-size:0.82rem;">{item['type']}</span>
-                            &nbsp;&nbsp;🤖 <span style="color:#8892b0; font-size:0.85rem;">Claude AI 분석 예정</span>
-                        </p>
+                        <p><span style="color:#64ffda; font-size:0.82rem;">{item['type']}</span></p>
                     </div>""",
                     unsafe_allow_html=True,
                 )
+
+                # ── Gemini AI 분석 버튼 (카드별 독립) ─────────────────
+                btn_key    = f"analyze_law_{item['mst'] or item['name']}"
+                result_key = f"law_analysis_{item['mst'] or item['name']}"
+
+                col_btn_ai, col_spacer = st.columns([2, 5])
+                with col_btn_ai:
+                    if st.button("🤖 Gemini AI 분석", key=btn_key, use_container_width=True):
+                        with st.spinner(f"Gemini AI 분석 중 — {item['name']}…"):
+                            try:
+                                ai_result = analyze_ordinance(
+                                    law_name=item["name"],
+                                    org=item["org"],
+                                    url=item.get("link", ""),
+                                )
+                                st.session_state[result_key] = ai_result
+                            except ValueError as e:
+                                st.session_state[result_key] = f"❌ **API 키 오류**: {e}"
+                            except Exception as e:
+                                st.session_state[result_key] = f"❌ **분석 실패**: {e}"
+
+                if result_key in st.session_state:
+                    with st.expander("📋 Gemini AI 분석 결과 보기", expanded=True):
+                        st.markdown(st.session_state[result_key])
+
         else:
             st.info(
                 f"'{law_query}'에 대한 검색 결과가 없습니다. "
                 "이 API는 조례 이름으로만 검색됩니다 — '태양광', '풍력발전', '해상풍력' 등으로 시도해보세요."
             )
-
-        # Claude AI 분석 예정 안내
-        st.markdown(
-            """<div class="coming-card">
-                <h4>🤖 Claude AI 분석 연동 예정</h4>
-                <p>조례 원문을 Claude AI가 읽고 핵심 규제 항목을 자동 요약합니다.</p>
-                <ul>
-                    <li>이격거리 기준 (태양광·풍력 — 민가, 도로, 하천 거리)</li>
-                    <li>소음 기준 (dB 수치 및 측정 조건)</li>
-                    <li>농지·산지 전용 허가 조건</li>
-                    <li>인허가 절차 및 처리 기간</li>
-                </ul>
-                <p style="margin-top:0.6rem;">✅ 준비 사항: <code>.env</code>에 <code>ANTHROPIC_API_KEY</code> 설정</p>
-            </div>""",
-            unsafe_allow_html=True,
-        )
 
     else:
         # 초기 상태: 검색 방법 안내
@@ -486,7 +493,7 @@ with tab1:
                     <li><b>신재생에너지</b> — 신재생에너지 관련 조례</li>
                     <li><b>에너지저장장치</b> — ESS 설치 안전 관련 조례</li>
                 </ul>
-                <p style="margin-top:0.6rem;">🤖 조례 원문 Claude AI 분석은 <code>ANTHROPIC_API_KEY</code> 설정 후 추가 예정</p>
+                <p style="margin-top:0.6rem;">🤖 조례 검색 후 각 카드의 <b>Gemini AI 분석</b> 버튼을 클릭하면 즉시 분석 결과를 볼 수 있습니다</p>
             </div>""",
             unsafe_allow_html=True,
         )
@@ -686,6 +693,27 @@ with tab2:
 
             with st.expander(f"{icon} {display_name}  ({len(kw_news)}건)"):
                 if kw_news:
+                    # ── Gemini AI 동향 분석 버튼 ──────────────────────
+                    news_btn_key    = f"analyze_news_{display_name}"
+                    news_result_key = f"news_analysis_{display_name}"
+
+                    col_ai_btn, col_ai_space = st.columns([2, 5])
+                    with col_ai_btn:
+                        if st.button("🤖 Gemini AI 동향 분석", key=news_btn_key, use_container_width=True):
+                            with st.spinner(f"Gemini AI 분석 중 — {display_name}…"):
+                                try:
+                                    ai_result = analyze_news_trends(kw_news, display_name)
+                                    st.session_state[news_result_key] = ai_result
+                                except ValueError as e:
+                                    st.session_state[news_result_key] = f"❌ **API 키 오류**: {e}"
+                                except Exception as e:
+                                    st.session_state[news_result_key] = f"❌ **분석 실패**: {e}"
+
+                    if news_result_key in st.session_state:
+                        with st.expander("📋 AI 동향 분석 결과", expanded=True):
+                            st.markdown(st.session_state[news_result_key])
+
+                    # ── 뉴스 카드 목록 ────────────────────────────────
                     with st.container(height=400):
                         for item in kw_news:
                             st.markdown(
