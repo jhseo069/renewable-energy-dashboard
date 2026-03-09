@@ -1181,8 +1181,10 @@ with tab3:
 # ── 공지사항 JSON 저장/로드 헬퍼 ───────────────────────────────────────
 import json as _json
 
-_NOTICES_FILE = Path(__file__).parent / "data" / "notices.json"
+_NOTICES_FILE    = Path(__file__).parent / "data" / "notices.json"
+_ATTACHMENTS_DIR = Path(__file__).parent / "data" / "attachments"
 _NOTICES_FILE.parent.mkdir(parents=True, exist_ok=True)
+_ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 _T4_ORG_ICON = {
     "kpx":     "📊",
@@ -1320,30 +1322,46 @@ with tab4:
                 key="form_title",
             )
             f_link = st.text_input(
-                "원문 링크 URL *",
+                "원문 링크 URL (없으면 빈칸)",
                 placeholder="https://",
                 key="form_link",
+            )
+            f_files = st.file_uploader(
+                "첨부파일 (PDF·HWP·DOCX·XLSX·PNG·JPG 등, 복수 선택 가능)",
+                accept_multiple_files=True,
+                key="form_files",
             )
 
         if st.button("✅ 추가", key="form_submit", use_container_width=False):
             if not f_title.strip():
                 st.error("제목을 입력해 주세요.")
-            elif not f_link.strip().startswith("http"):
-                st.error("올바른 URL을 입력해 주세요. (http로 시작)")
             else:
                 # org_key 역방향 조회
                 f_org_key = next((k for k, v in _T4_ORG_DISPLAY.items() if v == f_org), "etc")
+                added_at  = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+                # 첨부파일 저장
+                saved_files = []
+                for uf in (f_files or []):
+                    # 타임스탬프 prefix로 파일명 충돌 방지
+                    safe_name = added_at.replace(":", "-") + "_" + uf.name
+                    save_path = _ATTACHMENTS_DIR / safe_name
+                    save_path.write_bytes(uf.read())
+                    saved_files.append({"name": uf.name, "saved": safe_name})
+
                 new_entry = {
-                    "org_key":  f_org_key,
-                    "category": f_category,
-                    "title":    f_title.strip(),
-                    "date":     f_date.strftime("%Y-%m-%d"),
-                    "link":     f_link.strip(),
-                    "added_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                    "org_key":     f_org_key,
+                    "category":    f_category,
+                    "title":       f_title.strip(),
+                    "date":        f_date.strftime("%Y-%m-%d"),
+                    "link":        f_link.strip(),
+                    "attachments": saved_files,
+                    "added_at":    added_at,
                 }
                 all_notices.insert(0, new_entry)   # 최신 순 맨 앞에 삽입
                 _save_notices(all_notices)
-                st.success(f"✅ 공지사항이 등록되었습니다: {f_title.strip()}")
+                att_msg = f" (첨부 {len(saved_files)}개)" if saved_files else ""
+                st.success(f"✅ 공지사항이 등록되었습니다: {f_title.strip()}{att_msg}")
                 st.rerun()
 
     # ── 기관별 기관 홈 링크 + 공지 카드 ────────────────────────────────
@@ -1376,22 +1394,41 @@ with tab4:
                     # 삭제 버튼 + 카드 (두 열 레이아웃)
                     c_card, c_del = st.columns([10, 1])
                     with c_card:
+                        # 제목 링크: URL 있으면 하이퍼링크, 없으면 일반 텍스트
+                        title_html = (
+                            f'<a href="{notice["link"]}" target="_blank" '
+                            f'style="color:#ccd6f6; text-decoration:none;">{notice["title"]}</a>'
+                            if notice.get("link")
+                            else f'<span style="color:#ccd6f6;">{notice["title"]}</span>'
+                        )
+                        # 첨부파일 뱃지 표시
+                        att_list = notice.get("attachments", [])
+                        att_badge = (
+                            f' &nbsp;<span style="color:#64ffda; font-size:0.78rem;">📎 {len(att_list)}개</span>'
+                            if att_list else ""
+                        )
                         st.markdown(
                             f"""<div class="card" style="margin-bottom:0.4rem;">
                                 <p class="meta">
                                     {icon} {org_name}
-                                    &nbsp;·&nbsp; {notice.get('category','공지사항')}
+                                    &nbsp;·&nbsp; {notice.get('category','공지')}
                                     &nbsp;·&nbsp; {notice['date']}
+                                    {att_badge}
                                 </p>
-                                <h4 style="font-size:0.92rem;">
-                                    <a href="{notice['link']}" target="_blank"
-                                       style="color:#ccd6f6; text-decoration:none;">
-                                        {notice['title']}
-                                    </a>
-                                </h4>
+                                <h4 style="font-size:0.92rem;">{title_html}</h4>
                             </div>""",
                             unsafe_allow_html=True,
                         )
+                        # 첨부파일 개별 다운로드 버튼
+                        for att in att_list:
+                            att_path = _ATTACHMENTS_DIR / att["saved"]
+                            if att_path.exists():
+                                st.download_button(
+                                    label=f"📎 {att['name']}",
+                                    data=att_path.read_bytes(),
+                                    file_name=att["name"],
+                                    key=f"att_{notice.get('added_at','')}_{att['saved']}",
+                                )
                     with c_del:
                         # 삭제 버튼 — org_key + added_at 조합으로 고유 키 생성
                         del_key = f"del_{org_key}_{notice.get('added_at','')}"
