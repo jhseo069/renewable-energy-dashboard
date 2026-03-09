@@ -480,9 +480,9 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    # 오늘 KST 00:00 기준 컷오프 — 오늘 수집된 데이터만 포함
+    # 어제 KST 00:00 기준 컷오프 — 오늘 + 어제 데이터 포함
     _rpt_today    = get_kst_now().date()
-    _rpt_cutoff   = datetime.combine(_rpt_today, dtime(0, 0))
+    _rpt_cutoff   = datetime.combine(_rpt_today - timedelta(days=1), dtime(0, 0))
     _rpt_930_str  = datetime.combine(_rpt_today, dtime(9, 30)).strftime("%Y-%m-%dT%H:%M:%S")
 
     # 뉴스 (Tab 2) — 캐시 활용
