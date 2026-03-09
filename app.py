@@ -315,7 +315,7 @@ with st.sidebar:
         ("badge-ready",   "● 네이버 뉴스 API"),
         ("badge-ready",   "● 국회 열린국회 API"),
         ("badge-ready",   "● 중앙부처 RSS"),
-        ("badge-ready",   "● 한전/KPX/에너지공단 크롤러"),
+        ("badge-ready",   "● 유관기관 공지 크롤러 (6개)"),
     ]
     for cls, label in api_status:
         st.markdown(f'<span class="badge {cls}">{label}</span>', unsafe_allow_html=True)
@@ -975,6 +975,9 @@ with tab4:
             "KPX (전력거래소)": "kpx",
             "한국에너지공단":   "kemco",
             "한전 (KEPCO)":    "kepco",
+            "전기위원회":       "eleccom",
+            "신안군청":         "shinan",
+            "전남도청":         "jeonnam",
         }
         selected_org_label = st.selectbox(
             "기관 선택",
@@ -1006,7 +1009,7 @@ with tab4:
         ("📋", str(len(filtered_notices)), "수집된 공지"),
         ("✅", str(real_count),            "실데이터"),
         ("⚙️", str(mock_count),            "Mock(크롤링 대기)"),
-        ("🏢", "3개",                      "연동 기관"),
+        ("🏢", "6개",                      "연동 기관"),
     ]
     for col, (icon, value, label) in zip(kpi_cols, kpi_data_n):
         with col:
@@ -1035,11 +1038,21 @@ with tab4:
 
     # ── 기관별 Expander ─────────────────────────────────────────────────
     # org_key 기준으로 그룹핑 — 선택된 기관만 또는 전체
-    _ORG_ICON = {"kpx": "📊", "kemco": "🌿", "kepco": "⚡"}
+    _ORG_ICON = {
+        "kpx":     "📊",
+        "kemco":   "🌿",
+        "kepco":   "⚡",
+        "eleccom": "⚖️",
+        "shinan":  "🌊",
+        "jeonnam": "🏛️",
+    }
     _ORG_DISPLAY = {
-        "kpx":   "KPX (전력거래소)",
-        "kemco": "한국에너지공단",
-        "kepco": "한전 (KEPCO)",
+        "kpx":     "KPX (전력거래소)",
+        "kemco":   "한국에너지공단",
+        "kepco":   "한전 (KEPCO)",
+        "eleccom": "전기위원회",
+        "shinan":  "신안군청",
+        "jeonnam": "전남도청",
     }
 
     # 기관 그룹 구성 (선택 기관 우선)
@@ -1104,18 +1117,21 @@ with tab4:
     if not filtered_notices:
         st.info("수집된 공지사항이 없습니다.")
 
-    # ── Phase 2 예정 기관 안내 ──────────────────────────────────────────
+    # ── 연동 기관 현황 안내 ─────────────────────────────────────────────
     st.markdown("---")
     st.markdown(
         """<div class="coming-card">
-            <h4>🚀 Phase 2 연동 예정 기관</h4>
+            <h4>📋 현재 연동 기관 (6개) 및 수집 정보</h4>
             <ul>
-                <li><b>전기위원회</b> — 발전사업 허가 심의 결과, 규칙 개정 공고</li>
-                <li><b>신안군청</b> — 태양광·풍력 인허가 공고, 군 고시</li>
-                <li><b>산업부 전기위원회</b> — 계통 운영 규정 개정</li>
+                <li><b>📊 KPX (전력거래소)</b> — SMP 산정 결과, 재생에너지 입찰공고, 출력제어 안내</li>
+                <li><b>🌿 한국에너지공단</b> — RPS 의무량, REC 발급 기준, 보조금 공모</li>
+                <li><b>⚡ 한전 (KEPCO)</b> — 계통 연계 기술기준, 전기공급약관, 접속 신청</li>
+                <li><b>⚖️ 전기위원회</b> — 발전사업 허가·심의 결과, 허가 기준 개정</li>
+                <li><b>🌊 신안군청</b> — 해상풍력 고시·공고, 이익공유, 공유수면 허가</li>
+                <li><b>🏛️ 전남도청</b> — 해상풍력 단지 지정, 인허가 지원, 환경영향평가 고시</li>
             </ul>
             <p style="margin-top:0.5rem; font-size:0.82rem; color:#64ffda;">
-                ⚙️ JS 렌더링 필요 기관은 Playwright 비동기 크롤러로 별도 검토 예정
+                ⚙️ 크롤링 차단 기관은 ⚙️ Mock 배지 표시 · JS 렌더링 필요 시 Playwright 검토 예정
             </p>
         </div>""",
         unsafe_allow_html=True,

@@ -4,9 +4,12 @@
 Layer 3 (Execution) — 결정론적 Python 스크립트
 
 대상 기관:
-  - KPX  (전력거래소)      : SMP·입찰공고·출력제어 공지
-  - KEMCO (한국에너지공단) : RPS·REC·보조금 공고
-  - KEPCO (한국전력공사)   : 계통 연계·약관·접속 공지
+  - KPX   (전력거래소)      : SMP·입찰공고·출력제어 공지
+  - KEMCO (한국에너지공단)  : RPS·REC·보조금 공고
+  - KEPCO (한국전력공사)    : 계통 연계·약관·접속 공지
+  - 전기위원회              : 발전사업 허가·심의 결과
+  - 신안군청                : 해상풍력 고시·공고·이익공유
+  - 전남도청                : 해상풍력 단지 지정·인허가 공고
 
 실패 처리 원칙:
   - 403 Forbidden, 타임아웃, HTML 파싱 오류 → 즉시 Mock 반환
@@ -56,6 +59,27 @@ _AGENCY_CONFIG = {
         # 공지사항 게시판
         "url":     "https://home.kepco.co.kr/kepco/KO/ntcf/1/list.do",
         "category": "공지사항",
+    },
+    "eleccom": {
+        "org":     "전기위원회",
+        "base":    "https://www.electricitycommission.go.kr",
+        # 발전사업 허가·심의 공지 게시판 (eGovFrame 표준 CMS 패턴)
+        "url":     "https://www.electricitycommission.go.kr/web/cop/bbs/selectBoardList.do?bbsId=BBSMSTR_000000000002",
+        "category": "공지사항",
+    },
+    "shinan": {
+        "org":     "신안군청",
+        "base":    "https://www.shinan.go.kr",
+        # 고시공고 게시판 (행안부 표준프레임워크 CMS 패턴)
+        "url":     "https://www.shinan.go.kr/portal/main/board/boardList.do?menuId=1202",
+        "category": "고시공고",
+    },
+    "jeonnam": {
+        "org":     "전남도청",
+        "base":    "https://www.jeonnam.go.kr",
+        # 고시공고 게시판
+        "url":     "https://www.jeonnam.go.kr/govHelper/common/bbs/boardList.do?bbsId=BSTR_000000000000001",
+        "category": "고시공고",
     },
 }
 
@@ -157,6 +181,102 @@ _MOCK_NOTICES: dict[str, list[dict]] = {
             "title": "345kV 이상 송전망 접속 신청 처리 절차 안내",
             "date": "2026-02-15", "link": "https://home.kepco.co.kr",
             "category": "공지사항", "is_mock": True,
+        },
+    ],
+    "eleccom": [
+        {
+            "org": "전기위원회", "org_key": "eleccom",
+            "title": "해상풍력 발전사업 허가 심의 결과 공표 (제2026-2호)",
+            "date": "2026-03-06", "link": "https://www.electricitycommission.go.kr",
+            "category": "허가심의", "is_mock": True,
+        },
+        {
+            "org": "전기위원회", "org_key": "eleccom",
+            "title": "2026년 상반기 재생에너지 발전사업 허가 신청 일정 공고",
+            "date": "2026-03-03", "link": "https://www.electricitycommission.go.kr",
+            "category": "공고", "is_mock": True,
+        },
+        {
+            "org": "전기위원회", "org_key": "eleccom",
+            "title": "전기사업법 개정에 따른 발전사업 허가 기준 변경 안내",
+            "date": "2026-02-27", "link": "https://www.electricitycommission.go.kr",
+            "category": "공지사항", "is_mock": True,
+        },
+        {
+            "org": "전기위원회", "org_key": "eleccom",
+            "title": "육상풍력 발전사업 허가 신청 접수 결과 (2026년 1분기)",
+            "date": "2026-02-20", "link": "https://www.electricitycommission.go.kr",
+            "category": "허가심의", "is_mock": True,
+        },
+        {
+            "org": "전기위원회", "org_key": "eleccom",
+            "title": "태양광 발전사업 사업 계획서 작성 요령 개정 안내",
+            "date": "2026-02-14", "link": "https://www.electricitycommission.go.kr",
+            "category": "공지사항", "is_mock": True,
+        },
+    ],
+    "shinan": [
+        {
+            "org": "신안군청", "org_key": "shinan",
+            "title": "신안군 해상풍력 발전단지 지구지정 고시 (제2026-23호)",
+            "date": "2026-03-07", "link": "https://www.shinan.go.kr",
+            "category": "고시", "is_mock": True,
+        },
+        {
+            "org": "신안군청", "org_key": "shinan",
+            "title": "해상풍력 집적화단지 어업인 협의체 구성 공고",
+            "date": "2026-03-04", "link": "https://www.shinan.go.kr",
+            "category": "공고", "is_mock": True,
+        },
+        {
+            "org": "신안군청", "org_key": "shinan",
+            "title": "신안군 태양광·풍력 발전시설 이격거리 조례 개정 입법예고",
+            "date": "2026-02-26", "link": "https://www.shinan.go.kr",
+            "category": "입법예고", "is_mock": True,
+        },
+        {
+            "org": "신안군청", "org_key": "shinan",
+            "title": "해상풍력 주민참여 이익공유 사업 설명회 개최 안내",
+            "date": "2026-02-19", "link": "https://www.shinan.go.kr",
+            "category": "공지사항", "is_mock": True,
+        },
+        {
+            "org": "신안군청", "org_key": "shinan",
+            "title": "공유수면 점용·사용허가 신청 처리 결과 공고 (2026-1차)",
+            "date": "2026-02-12", "link": "https://www.shinan.go.kr",
+            "category": "공고", "is_mock": True,
+        },
+    ],
+    "jeonnam": [
+        {
+            "org": "전남도청", "org_key": "jeonnam",
+            "title": "전라남도 해상풍력 특화단지 개발 기본계획 수립 용역 공고",
+            "date": "2026-03-05", "link": "https://www.jeonnam.go.kr",
+            "category": "공고", "is_mock": True,
+        },
+        {
+            "org": "전남도청", "org_key": "jeonnam",
+            "title": "전남 신재생에너지 산업 육성 지원 조례 개정 고시",
+            "date": "2026-03-02", "link": "https://www.jeonnam.go.kr",
+            "category": "고시", "is_mock": True,
+        },
+        {
+            "org": "전남도청", "org_key": "jeonnam",
+            "title": "2026년 전라남도 해상풍력 인허가 지원단 운영 계획 공고",
+            "date": "2026-02-25", "link": "https://www.jeonnam.go.kr",
+            "category": "공고", "is_mock": True,
+        },
+        {
+            "org": "전남도청", "org_key": "jeonnam",
+            "title": "전남도 해상풍력 어업피해 조사 및 보상 기준 설명회 개최",
+            "date": "2026-02-18", "link": "https://www.jeonnam.go.kr",
+            "category": "설명회", "is_mock": True,
+        },
+        {
+            "org": "전남도청", "org_key": "jeonnam",
+            "title": "육상풍력 환경영향평가 협의 결과 고시 (제2026-전남-8호)",
+            "date": "2026-02-11", "link": "https://www.jeonnam.go.kr",
+            "category": "고시", "is_mock": True,
         },
     ],
 }
@@ -392,6 +512,97 @@ def _fetch_kepco_notices() -> list[dict]:
         return _MOCK_NOTICES["kepco"]
 
 
+def _fetch_generic_board(org_key: str) -> list[dict]:
+    """
+    한국 정부기관 표준 HTML 테이블 게시판 범용 파서.
+    KPX·KEMCO·KEPCO 이외의 기관(전기위원회·신안군청·전남도청)에 사용.
+    eGovFrame·행안부 표준프레임워크 사이트의 공통 테이블 구조를 처리.
+
+    실패 조건: 403, 타임아웃, 테이블 없음, 파싱된 공지 0건 → 즉시 Mock 반환
+    """
+    cfg = _AGENCY_CONFIG[org_key]
+    tag  = f"[{org_key.upper()}]"
+    try:
+        resp = requests.get(cfg["url"], headers=_HEADERS, timeout=10)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        notices: list[dict] = []
+
+        # 게시판 테이블 탐색 — class에 board/list/notice/bbs/tbl 포함하는 것 우선
+        _BOARD_CLASSES = ("board", "list", "notice", "bbs", "tbl", "table")
+        table = next(
+            (
+                soup.find("table", class_=lambda c: c and any(k in " ".join(c) for k in _BOARD_CLASSES))
+                for _ in [1]  # 단일 순회용
+            ),
+            None,
+        ) or soup.find("table")
+
+        if not table:
+            print(f"{tag} 테이블 요소 미발견 → Mock 반환")
+            return _MOCK_NOTICES[org_key]
+
+        tbody = table.find("tbody") or table
+        rows  = tbody.find_all("tr")
+
+        for row in rows:
+            cols = row.find_all("td")
+            if len(cols) < 2:
+                continue
+
+            # 제목 열: <a> 태그가 있는 첫 번째 td
+            title_td = next((td for td in cols if td.find("a")), None)
+            if not title_td:
+                continue
+
+            a_tag  = title_td.find("a")
+            title  = a_tag.get_text(strip=True)
+            href   = a_tag.get("href", "")
+            link   = (cfg["base"] + href) if href.startswith("/") else (href or cfg["base"])
+
+            # 날짜 열: 보통 마지막에서 두 번째 열 (마지막은 조회수)
+            date_text = cols[-2].get_text(strip=True) if len(cols) >= 4 else cols[-1].get_text(strip=True)
+            date = _parse_date(date_text)
+
+            if title:
+                notices.append({
+                    "org":      cfg["org"],
+                    "org_key":  org_key,
+                    "title":    title,
+                    "date":     date,
+                    "link":     link,
+                    "category": cfg["category"],
+                    "is_mock":  False,
+                })
+
+        if not notices:
+            print(f"{tag} 파싱된 공지 0건 → Mock 반환")
+            return _MOCK_NOTICES[org_key]
+
+        print(f"{tag} 실데이터 수집 완료: {len(notices)}건")
+        return notices[:10]
+
+    except Exception as e:
+        print(f"{tag} 수집 실패: {e} → Mock 반환")
+        return _MOCK_NOTICES[org_key]
+
+
+def _fetch_eleccom_notices() -> list[dict]:
+    """전기위원회 발전사업 허가·심의 공지 크롤링. 실패 시 Mock 즉시 반환."""
+    return _fetch_generic_board("eleccom")
+
+
+def _fetch_shinan_notices() -> list[dict]:
+    """신안군청 해상풍력 고시·공고 크롤링. 실패 시 Mock 즉시 반환."""
+    return _fetch_generic_board("shinan")
+
+
+def _fetch_jeonnam_notices() -> list[dict]:
+    """전남도청 신재생에너지 고시·공고 크롤링. 실패 시 Mock 즉시 반환."""
+    return _fetch_generic_board("jeonnam")
+
+
 def fetch_all_notices() -> list[dict]:
     """
     전체 유관기관 공지사항을 수집하여 날짜순 정렬 후 반환.
@@ -404,7 +615,15 @@ def fetch_all_notices() -> list[dict]:
     all_notices: list[dict] = []
 
     # 기관별 독립 수집 — 실패해도 다음 기관 계속 진행
-    for fetcher in [_fetch_kpx_notices, _fetch_kemco_notices, _fetch_kepco_notices]:
+    _FETCHERS = [
+        _fetch_kpx_notices,
+        _fetch_kemco_notices,
+        _fetch_kepco_notices,
+        _fetch_eleccom_notices,  # 전기위원회
+        _fetch_shinan_notices,   # 신안군청
+        _fetch_jeonnam_notices,  # 전남도청
+    ]
+    for fetcher in _FETCHERS:
         try:
             all_notices.extend(fetcher())
         except Exception as e:
