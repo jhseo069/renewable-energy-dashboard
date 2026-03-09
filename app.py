@@ -475,6 +475,71 @@ def _generate_newsletter_html(
     events: list,
 ) -> str:
     """일일 뉴스레터 HTML 생성 — 브라우저에서 열어 인쇄/PDF 저장 가능"""
+    import io, base64
+    import matplotlib
+    matplotlib.use("Agg")  # GUI 없는 환경(Streamlit Cloud)용 백엔드
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    from matplotlib import rcParams
+    rcParams["font.family"] = ["DejaVu Sans", "sans-serif"]
+    rcParams["axes.unicode_minus"] = False
+
+    # ── SMP/REC 추이 차트 생성 (base64 PNG) ─────────────────────────────
+    chart_b64 = ""
+    if len(smp_records) >= 2:
+        try:
+            _sr_sorted = sorted(smp_records, key=lambda x: x["date"])
+            _dates = [datetime.strptime(r["date"], "%Y-%m-%d") for r in _sr_sorted]
+            _smps  = [r["SMP"] for r in _sr_sorted]
+            _recs  = [r["REC"] for r in _sr_sorted]
+
+            fig, ax1 = plt.subplots(figsize=(4.2, 2.4))
+            fig.patch.set_facecolor("#f8f9fa")
+            ax1.set_facecolor("#f8f9fa")
+
+            ax1.plot(_dates, _smps, color="#2176ae", linewidth=1.8,
+                     marker="o", markersize=3, label="SMP")
+            ax1.set_ylabel("SMP (원/kWh)", fontsize=7, color="#2176ae")
+            ax1.tick_params(axis="y", labelcolor="#2176ae", labelsize=6)
+            ax1.tick_params(axis="x", labelsize=6)
+            ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
+            ax1.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=6))
+
+            ax2 = ax1.twinx()
+            ax2.plot(_dates, _recs, color="#e67e22", linewidth=1.8,
+                     marker="s", markersize=3, label="REC")
+            ax2.set_ylabel("REC (원/REC)", fontsize=7, color="#e67e22")
+            ax2.tick_params(axis="y", labelcolor="#e67e22", labelsize=6)
+
+            # 최신값 레이블 표시
+            ax1.annotate(f"{_smps[-1]:.2f}", xy=(_dates[-1], _smps[-1]),
+                         xytext=(4, 0), textcoords="offset points",
+                         fontsize=6, color="#2176ae", va="center")
+            ax2.annotate(f"{_recs[-1]:.0f}", xy=(_dates[-1], _recs[-1]),
+                         xytext=(-28, 4), textcoords="offset points",
+                         fontsize=6, color="#e67e22", va="center")
+
+            lines1, labels1 = ax1.get_legend_handles_labels()
+            lines2, labels2 = ax2.get_legend_handles_labels()
+            ax1.legend(lines1 + lines2, labels1 + labels2,
+                       fontsize=6, loc="upper left", framealpha=0.7)
+            plt.tight_layout(pad=0.5)
+
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
+            plt.close(fig)
+            buf.seek(0)
+            chart_b64 = base64.b64encode(buf.read()).decode("utf-8")
+        except Exception:
+            chart_b64 = ""
+
+    chart_img_html = (
+        f'<img src="data:image/png;base64,{chart_b64}" '
+        f'style="width:100%;max-width:340px;" alt="SMP/REC 추이 차트"/>'
+        if chart_b64
+        else '<p style="font-size:0.78rem;color:#aaa;padding:18px 0;">'
+             '(데이터 2건 이상 입력 시 차트가 표시됩니다)</p>'
+    )
 
     # SMP/REC 가격 비교 (최신 2개 항목)
     curr = smp_records[0] if len(smp_records) >= 1 else {"date": "—", "SMP": 0.0, "REC": 0.0}
@@ -597,8 +662,8 @@ def _generate_newsletter_html(
         </table>
       </div>
       <div>
-        <p style="font-size:0.8rem;color:#666;margin:0 0 6px;">연간 누적 SMP/REC 가격동향</p>
-        <p style="font-size:0.78rem;color:#aaa;margin:0;padding:18px 0;">(추이 차트는 대시보드 탭4에서 확인하세요)</p>
+        <p style="font-size:0.8rem;color:#666;margin:0 0 6px;">누적 SMP/REC 가격동향</p>
+        {chart_img_html}
       </div>
     </div></div>
   </div>
