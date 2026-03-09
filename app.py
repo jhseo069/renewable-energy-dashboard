@@ -1272,25 +1272,26 @@ with tab4:
         selected_org_key = _T4_FILTER_OPTIONS[selected_org_label]
 
     with col_n_dl:
-        # 전체 CSV 다운로드 (Tab 2 방식 — 1개 버튼)
-        dl_notices = [n for n in display_notices if not selected_org_key or n["org_key"] == selected_org_key]
-        if dl_notices:
-            dl_df_all = pd.DataFrame([{
-                "기관명":   _T4_ORG_DISPLAY.get(n["org_key"], n["org_key"]),
-                "카테고리": n.get("category", ""),
-                "제목":     n["title"],
-                "날짜":     n["date"],
-                "링크":     n["link"],
-            } for n in dl_notices])
-            today_str = get_kst_now().strftime("%Y-%m-%d")
-            st.download_button(
-                label="📥 유관기관 공지 전체 CSV 다운로드",
-                data=to_csv_bytes(dl_df_all),
-                file_name=f"{today_str}_유관기관공지사항.csv",
-                mime="text/csv",
-                use_container_width=True,
-                key="dl_all_notices",
-            )
+        # 전체 CSV 다운로드 — 보관 포함 all_notices 기준 (항상 표시)
+        dl_notices = [n for n in all_notices if not selected_org_key or n["org_key"] == selected_org_key]
+        today_str  = get_kst_now().strftime("%Y-%m-%d")
+        dl_df_all  = pd.DataFrame([{
+            "기관명":   _T4_ORG_DISPLAY.get(n["org_key"], n["org_key"]),
+            "카테고리": n.get("category", ""),
+            "제목":     n["title"],
+            "날짜":     n["date"],
+            "링크":     n["link"],
+            "등록일시":  n.get("added_at", ""),
+        } for n in dl_notices]) if dl_notices else pd.DataFrame()
+        st.download_button(
+            label="📥 유관기관 공지 전체 CSV 다운로드",
+            data=to_csv_bytes(dl_df_all) if not dl_df_all.empty else b"",
+            file_name=f"{today_str}_유관기관공지사항.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="dl_all_notices",
+            disabled=dl_df_all.empty,
+        )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
