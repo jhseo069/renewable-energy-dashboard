@@ -402,6 +402,57 @@ st.markdown(
 
 
 # ─────────────────────────────────────────────
+# 공지사항 / SMP/REC 헬퍼 (사이드바 + Tab 4 공통 사용)
+# ─────────────────────────────────────────────
+import json as _json
+
+_NOTICES_FILE    = Path(__file__).parent / "data" / "notices.json"
+_ATTACHMENTS_DIR = Path(__file__).parent / "data" / "attachments"
+_SMP_REC_FILE    = Path(__file__).parent / "data" / "smp_rec.json"
+Path(__file__).parent.joinpath("data").mkdir(parents=True, exist_ok=True)
+_ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
+
+_T4_ORG_DISPLAY = {
+    "kpx":     "KPX (전력거래소)",
+    "kemco":   "한국에너지공단",
+    "kepco":   "한전 (KEPCO)",
+    "eleccom": "전기위원회",
+    "shinan":  "신안군청",
+    "jeonnam": "전남도청",
+}
+
+
+def _load_notices() -> list[dict]:
+    """data/notices.json 에서 공지사항 목록을 로드합니다."""
+    if _NOTICES_FILE.exists():
+        try:
+            return _json.loads(_NOTICES_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
+
+
+def _save_notices(notices: list[dict]) -> None:
+    """공지사항 목록을 data/notices.json 에 저장합니다."""
+    _NOTICES_FILE.write_text(_json.dumps(notices, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_smp_rec() -> list[dict]:
+    """data/smp_rec.json 에서 SMP/REC 기록을 로드합니다."""
+    if _SMP_REC_FILE.exists():
+        try:
+            return _json.loads(_SMP_REC_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
+
+
+def _save_smp_rec(records: list[dict]) -> None:
+    """SMP/REC 기록을 data/smp_rec.json 에 저장합니다."""
+    _SMP_REC_FILE.write_text(_json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+# ─────────────────────────────────────────────
 # 사이드바
 # ─────────────────────────────────────────────
 with st.sidebar:
@@ -420,10 +471,92 @@ with st.sidebar:
     for cls, label in api_status:
         st.markdown(f'<span class="badge {cls}">{label}</span>', unsafe_allow_html=True)
 
+    # ── 일일 모니터링 전체 리포트 CSV ───────────────────────────────────
+    st.markdown("---")
+    st.markdown("**📊 일일 모니터링 전체 다운로드**")
+    st.markdown(
+        "<p style='color:#8892b0; font-size:0.78rem;'>"
+        "탭2(뉴스)·탭3(보도자료+법안)·탭4(공지사항)를 하나의 CSV로 통합합니다.</p>",
+        unsafe_allow_html=True,
+    )
+
+    # 오늘 KST 00:00 기준 컷오프 — 오늘 수집된 데이터만 포함
+    _rpt_today    = get_kst_now().date()
+    _rpt_cutoff   = datetime.combine(_rpt_today, dtime(0, 0))
+    _rpt_930_str  = datetime.combine(_rpt_today, dtime(9, 30)).strftime("%Y-%m-%dT%H:%M:%S")
+
+    # 뉴스 (Tab 2) — 캐시 활용
+    try:
+        _rpt_news_raw = _fetch_all_keyword_news(_KEYWORDS)
+    except Exception:
+        _rpt_news_raw = {}
+    _rpt_rows = []
+    for _kw in _KEYWORDS:
+        for _n in _rpt_news_raw.get(_kw, []):
+            if _safe_parse_dt(_n.get("date", "")) >= _rpt_cutoff:
+                _rpt_rows.append({
+                    "구분": "뉴스", "날짜": _n.get("date", ""),
+                    "출처": _n.get("source", ""), "키워드": _kw,
+                    "제목": _n.get("title", ""), "요약": _n.get("summary", ""),
+                    "링크": _n.get("link", ""),
+                })
+
+    # 보도자료 (Tab 3 RSS) — 캐시 활용
+    for _a in _fetch_policy_rss():
+        if not _a.get("is_dummy") and _safe_parse_dt(_a.get("date", "")) >= _rpt_cutoff:
+            _rpt_rows.append({
+                "구분": "보도자료", "날짜": _a.get("date", ""),
+                "출처": _a.get("source", ""), "키워드": "",
+                "제목": _a.get("title", ""), "요약": _a.get("summary", ""),
+                "링크": _a.get("link", ""),
+            })
+
+    # 국회 법안 (Tab 3) — 캐시 활용
+    for _b in _fetch_assembly_bills():
+        if not _b.get("is_mock") and _safe_parse_dt(_b.get("propose_date", "")) >= _rpt_cutoff:
+            _rpt_rows.append({
+                "구분": "국회법안", "날짜": _b.get("propose_date", ""),
+                "출처": _b.get("committee", ""), "키워드": "",
+                "제목": _b.get("title", ""),
+                "요약": f"{_b.get('proposer','')} | {_b.get('status','')}",
+                "링크": _b.get("link", ""),
+            })
+
+    # 공지사항 (Tab 4) — JSON에서 로드 (9:30 이후 등록분)
+    for _nc in _load_notices():
+        if _nc.get("added_at", "") >= _rpt_930_str:
+            _rpt_rows.append({
+                "구분": "공지사항", "날짜": _nc.get("date", ""),
+                "출처": _T4_ORG_DISPLAY.get(_nc.get("org_key", ""), _nc.get("org_key", "")),
+                "키워드": _nc.get("category", ""),
+                "제목": _nc.get("title", ""), "요약": "",
+                "링크": _nc.get("link", ""),
+            })
+
+    _rpt_df   = pd.DataFrame(_rpt_rows) if _rpt_rows else pd.DataFrame(
+        columns=["구분", "날짜", "출처", "키워드", "제목", "요약", "링크"])
+    _rpt_date = _rpt_today.strftime("%Y-%m-%d")
+    st.download_button(
+        label=f"📥 {_rpt_date} 전체 리포트 CSV",
+        data=to_csv_bytes(_rpt_df),
+        file_name=f"{_rpt_date}_신재생에너지_일일모니터링.csv",
+        mime="text/csv",
+        use_container_width=True,
+        disabled=_rpt_df.empty,
+        key="dl_daily_report",
+    )
+    if _rpt_df.empty:
+        st.caption("오늘 수집된 데이터가 없습니다.")
+    else:
+        st.caption(f"총 {len(_rpt_df)}건 (뉴스 {sum(1 for r in _rpt_rows if r['구분']=='뉴스')}·"
+                   f"보도자료 {sum(1 for r in _rpt_rows if r['구분']=='보도자료')}·"
+                   f"법안 {sum(1 for r in _rpt_rows if r['구분']=='국회법안')}·"
+                   f"공지 {sum(1 for r in _rpt_rows if r['구분']=='공지사항')}건)")
+
     st.markdown("---")
     st.markdown(
         "<p style='color:#8892b0; font-size:0.8rem;'>"
-        "신재생에너지 사업개발팀<br>사내 대시보드 v0.6.1</p>",
+        "신재생에너지 사업개발팀<br>사내 대시보드 v0.7.0</p>",
         unsafe_allow_html=True,
     )
 
@@ -1170,14 +1303,9 @@ with tab3:
 # TAB 4 : 유관기관 공지사항 (수동 입력 방식)
 # =============================================
 
-# ── 공지사항 JSON 저장/로드 헬퍼 ───────────────────────────────────────
-import json as _json
-
-_NOTICES_FILE    = Path(__file__).parent / "data" / "notices.json"
-_ATTACHMENTS_DIR = Path(__file__).parent / "data" / "attachments"
-_SMP_REC_FILE    = Path(__file__).parent / "data" / "smp_rec.json"
-_NOTICES_FILE.parent.mkdir(parents=True, exist_ok=True)
-_ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
+# _load_notices, _save_notices, _load_smp_rec, _save_smp_rec,
+# _T4_ORG_DISPLAY, _NOTICES_FILE, _ATTACHMENTS_DIR, _SMP_REC_FILE 는
+# 사이드바 이전 공통 헬퍼 섹션에 정의됨.
 
 _T4_ORG_ICON = {
     "kpx":     "📊",
@@ -1187,14 +1315,6 @@ _T4_ORG_ICON = {
     "shinan":  "🌊",
     "jeonnam": "🏛️",
 }
-_T4_ORG_DISPLAY = {
-    "kpx":     "KPX (전력거래소)",
-    "kemco":   "한국에너지공단",
-    "kepco":   "한전 (KEPCO)",
-    "eleccom": "전기위원회",
-    "shinan":  "신안군청",
-    "jeonnam": "전남도청",
-}
 _T4_ORG_URL = {
     "kpx":     "https://www.kpx.or.kr",
     "kemco":   "https://www.energy.or.kr",
@@ -1203,32 +1323,6 @@ _T4_ORG_URL = {
     "shinan":  "https://www.shinan.go.kr",
     "jeonnam": "https://www.jeonnam.go.kr",
 }
-
-def _load_notices() -> list[dict]:
-    """data/notices.json 에서 공지사항 목록을 로드합니다."""
-    if _NOTICES_FILE.exists():
-        try:
-            return _json.loads(_NOTICES_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-    return []
-
-def _save_notices(notices: list[dict]) -> None:
-    """공지사항 목록을 data/notices.json 에 저장합니다."""
-    _NOTICES_FILE.write_text(_json.dumps(notices, ensure_ascii=False, indent=2), encoding="utf-8")
-
-def _load_smp_rec() -> list[dict]:
-    """data/smp_rec.json 에서 SMP/REC 기록을 로드합니다."""
-    if _SMP_REC_FILE.exists():
-        try:
-            return _json.loads(_SMP_REC_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-    return []
-
-def _save_smp_rec(records: list[dict]) -> None:
-    """SMP/REC 기록을 data/smp_rec.json 에 저장합니다."""
-    _SMP_REC_FILE.write_text(_json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
 with tab4:
     st.markdown("### 📡 유관기관 공지사항")
