@@ -453,6 +453,166 @@ def _save_smp_rec(records: list[dict]) -> None:
 
 
 # ─────────────────────────────────────────────
+# 주간 뉴스레터 생성 헬퍼
+# ─────────────────────────────────────────────
+_NL_CATEGORIES = {
+    "해상풍력":      ["해상풍력", "해상풍력설치선", "WTIV", "하부설치선"],
+    "풍력":          ["풍력"],
+    "태양광/ESS":    ["태양광", "ESS", "BESS"],
+    "정부정책/기타": ["분산에너지", "수소", "출력제어", "전력계통", "신재생", "PPA", "REC"],
+}
+
+
+def _generate_newsletter_html(
+    vol: int,
+    issue_date_str: str,
+    news_by_cat: dict,
+    rss_rows: list,
+    notice_rows: list,
+    smp_records: list,
+    issue_bg: str,
+    issue_content: str,
+    events: list,
+) -> str:
+    """주간 뉴스레터 HTML 생성 — 브라우저에서 열어 인쇄/PDF 저장 가능"""
+
+    # SMP/REC 가격 비교 (최신 2개 항목)
+    curr = smp_records[0] if len(smp_records) >= 1 else {"date": "—", "SMP": 0.0, "REC": 0.0}
+    prev = smp_records[1] if len(smp_records) >= 2 else curr
+    smp_diff  = curr["SMP"] - prev["SMP"]
+    rec_diff  = curr["REC"] - prev["REC"]
+    smp_arrow = "▼" if smp_diff < 0 else "▲"
+    rec_arrow = "▼" if rec_diff < 0 else "▲"
+    smp_col   = "#c0392b" if smp_diff < 0 else "#27ae60"
+    rec_col   = "#c0392b" if rec_diff < 0 else "#27ae60"
+
+    def _news_ul(items: list, limit: int = 6) -> str:
+        return "".join(
+            f'<li><a href="{n.get("link","#")}" target="_blank">{n.get("title","")}</a></li>'
+            for n in items[:limit]
+        )
+
+    def _section(title: str, body_html: str) -> str:
+        return (
+            f'<div class="sec"><div class="sec-hd">{title}</div>'
+            f'<div class="sec-bd">{body_html}</div></div>'
+        )
+
+    # 뉴스 섹션
+    news_html = ""
+    for cat, items in news_by_cat.items():
+        if items:
+            news_html += _section(cat, f'<ul>{_news_ul(items)}</ul>')
+
+    # 기관 보도/공지 섹션
+    inst_items = rss_rows[:8] + [n for n in notice_rows if n.get("category") in ("보도", "고시", "공지")][:6]
+    inst_html = ""
+    if inst_items:
+        sub = "※산자부, 환경부, 해수부, 국방부, 국회, 에관공, 한전, KPX, 전기위원회"
+        inst_html = _section(
+            f'기관(보도, 고시, 공지)<br><small style="font-weight:400;font-size:0.75rem;">{sub}</small>',
+            f'<ul>{_news_ul(inst_items, 10)}</ul>'
+        )
+
+    # 주요이슈사항
+    issue_html = ""
+    if issue_bg or issue_content:
+        rows = ""
+        if issue_bg:
+            rows += f'<tr><td class="il">배경</td><td>{issue_bg}</td></tr>'
+        if issue_content:
+            content_fmt = issue_content.replace("\n", "<br>")
+            rows += f'<tr><td class="il">주요<br>내용</td><td>{content_fmt}</td></tr>'
+        issue_html = _section("주요이슈사항",
+            f'<table class="it"><tbody>{rows}</tbody></table>')
+
+    # 행사 일정
+    event_html = ""
+    valid_ev = [e for e in events if e.get("name", "").strip()]
+    if valid_ev:
+        rows = "".join(
+            f'<tr><td>{e.get("date","")}</td><td>{e.get("name","")}</td>'
+            f'<td>{e.get("place","")}</td><td>{e.get("host","")}</td></tr>'
+            for e in valid_ev
+        )
+        event_html = _section("행사 일정",
+            f'<table class="et"><thead><tr><th>일 시</th><th>행사명</th><th>장 소</th><th>주 관</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table>')
+
+    return f"""<!DOCTYPE html>
+<html lang="ko"><head><meta charset="UTF-8">
+<title>Renewable Energy Monday Vol.{vol}</title>
+<style>
+  body{{font-family:'맑은 고딕','Malgun Gothic',sans-serif;margin:0;padding:20px;background:#f0f0f0;color:#333;}}
+  .wrap{{max-width:760px;margin:0 auto;background:#fff;}}
+  .hdr{{background:linear-gradient(135deg,#1a3a5c 0%,#2176ae 55%,#56a0d3 100%);overflow:hidden;}}
+  .hdr-top{{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 20px 4px;}}
+  .logo{{font-size:2.4rem;font-weight:900;color:#f39c12;letter-spacing:3px;}}
+  .iss{{font-size:0.8rem;color:#ecf0f1;text-align:right;line-height:1.6;}}
+  .ttl{{padding:2px 20px 18px;font-size:1.9rem;font-weight:700;color:#fff;letter-spacing:1px;}}
+  .sec{{margin:10px 18px;border:1px solid #ccc;border-radius:3px;}}
+  .sec-hd{{background:#e2e6ea;padding:7px 13px;font-weight:700;font-size:0.9rem;color:#2c3e50;border-bottom:1px solid #ccc;}}
+  .sec-bd{{padding:10px 13px;}}
+  ul{{margin:4px 0;padding-left:18px;}}
+  li{{margin:5px 0;font-size:0.87rem;line-height:1.5;}}
+  li a{{color:#2c3e50;text-decoration:none;}}
+  li a:hover{{text-decoration:underline;color:#2176ae;}}
+  .pg{{display:grid;grid-template-columns:1fr 1fr;gap:14px;}}
+  .pt{{width:100%;border-collapse:collapse;font-size:0.84rem;}}
+  .pt th,.pt td{{border:1px solid #ccc;padding:5px 9px;text-align:center;}}
+  .pt th{{background:#f0f4f8;font-weight:700;}}
+  .pt .lb{{text-align:left;font-weight:600;}}
+  .it{{width:100%;border-collapse:collapse;font-size:0.84rem;}}
+  .it td{{border:1px solid #ccc;padding:8px 11px;vertical-align:top;}}
+  .il{{background:#f0f4f8;font-weight:700;width:55px;text-align:center;color:#2c3e50;}}
+  .et{{width:100%;border-collapse:collapse;font-size:0.83rem;}}
+  .et th,.et td{{border:1px solid #ccc;padding:6px 8px;text-align:center;}}
+  .et th{{background:#f0f4f8;font-weight:700;}}
+  .foot{{text-align:center;font-size:0.78rem;color:#888;padding:14px;border-top:1px solid #eee;margin-top:8px;}}
+  @media print{{body{{background:#fff;padding:0;}}.wrap{{max-width:100%;}}}}
+</style></head>
+<body><div class="wrap">
+  <div class="hdr">
+    <div class="hdr-top">
+      <div class="logo">KCH</div>
+      <div class="iss">Weekly Renewable Energy Issue<br>{issue_date_str} Vol. {vol}</div>
+    </div>
+    <div class="ttl">Renewable Energy Monday</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-hd">가격지표</div>
+    <div class="sec-bd"><div class="pg">
+      <div>
+        <p style="font-size:0.8rem;color:#666;margin:0 0 6px;">주간 SMP/REC 가격</p>
+        <table class="pt">
+          <thead>
+            <tr><th>구 분</th><th colspan="2">평균 가격</th><th>비 고</th></tr>
+            <tr><th></th><th style="font-weight:400;">{prev.get("date","직전")}</th><th style="font-weight:400;">{curr.get("date","최신")}</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="lb">SMP</td><td>{prev["SMP"]:.2f}</td><td>{curr["SMP"]:.2f}</td><td style="color:{smp_col};">({smp_diff:+.2f}원 {smp_arrow})</td></tr>
+            <tr><td class="lb">REC</td><td>{prev["REC"]:.0f}</td><td>{curr["REC"]:.0f}</td><td style="color:{rec_col};">({rec_diff:+.0f}원 {rec_arrow})</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <p style="font-size:0.8rem;color:#666;margin:0 0 6px;">연간 누적 SMP/REC 가격동향</p>
+        <p style="font-size:0.78rem;color:#aaa;margin:0;padding:18px 0;">(추이 차트는 대시보드 탭4에서 확인하세요)</p>
+      </div>
+    </div></div>
+  </div>
+
+  {news_html}
+  {inst_html}
+  {issue_html}
+  {event_html}
+
+  <p class="foot">※ 기사 제목을 클릭하시면 해당 링크로 연결됩니다.</p>
+</div></body></html>"""
+
+
+# ─────────────────────────────────────────────
 # 사이드바
 # ─────────────────────────────────────────────
 with st.sidebar:
@@ -553,10 +713,112 @@ with st.sidebar:
                    f"법안 {sum(1 for r in _rpt_rows if r['구분']=='국회법안')}·"
                    f"공지 {sum(1 for r in _rpt_rows if r['구분']=='공지사항')}건)")
 
+    # ── 주간 뉴스레터 생성 ─────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("**📰 주간 뉴스레터 생성**")
+    with st.expander("⚙️ 뉴스레터 설정 및 생성", expanded=False):
+        nl_c1, nl_c2 = st.columns(2)
+        with nl_c1:
+            nl_vol  = st.number_input("Vol.", min_value=1, value=1, step=1, key="nl_vol")
+        with nl_c2:
+            nl_date = st.date_input("발행일", value=get_kst_now().date(), key="nl_date")
+
+        st.markdown("<p style='font-size:0.82rem; color:#8892b0; margin:6px 0 2px;'>주요이슈사항</p>", unsafe_allow_html=True)
+        nl_issue_bg = st.text_input("배경 (한 줄)", placeholder="예: 태양광 업계 간담회 개최…", key="nl_issue_bg")
+
+        if st.button("🤖 AI 초안 생성", key="nl_ai_btn", use_container_width=True):
+            try:
+                _ai_news_raw = _fetch_all_keyword_news(_KEYWORDS)
+                _ai_combined = []
+                for _kw in _KEYWORDS:
+                    for _n in _ai_news_raw.get(_kw, [])[:2]:
+                        _ai_combined.append({**_n, "키워드": _kw})
+                if _ai_combined:
+                    with st.spinner("Gemini AI 초안 작성 중…"):
+                        _draft = analyze_news_trends(_ai_combined[:20], "신재생에너지 주간 동향")
+                    st.session_state["nl_issue_content"] = _draft
+                    st.rerun()
+            except Exception as _e:
+                st.error(f"AI 오류: {_e}")
+
+        nl_issue_content = st.text_area(
+            "주요내용 (직접 입력 또는 AI 초안 수정)",
+            height=160, key="nl_issue_content",
+            placeholder="AI 초안 버튼 클릭 후 편집하거나 직접 입력하세요.",
+        )
+
+        st.markdown("<p style='font-size:0.82rem; color:#8892b0; margin:6px 0 2px;'>행사 일정 (줄당 1건: 날짜, 행사명, 장소, 주관)</p>", unsafe_allow_html=True)
+        nl_events_raw = st.text_area(
+            "행사", height=90, key="nl_events",
+            placeholder="2026-03-10, 풍력 경쟁입찰 설명회, 코엑스, 에너지공단\n2026-03-11, 인터배터리 2026, 코엑스, 산업부",
+        )
+
+        if st.button("📄 HTML 뉴스레터 생성", key="nl_gen_btn", use_container_width=True):
+            # 7일치 뉴스 수집 (캐시 활용)
+            _nl_cutoff = get_kst_now() - timedelta(days=7)
+            try:
+                _nl_raw = _fetch_all_keyword_news(_KEYWORDS)
+            except Exception:
+                _nl_raw = {}
+
+            _nl_by_cat: dict = {}
+            for _cat, _kws in _NL_CATEGORIES.items():
+                _seen, _items = set(), []
+                for _kw in _kws:
+                    for _n in _nl_raw.get(_kw, []):
+                        _t = _n.get("title", "")
+                        if _t not in _seen and _safe_parse_dt(_n.get("date", "")) >= _nl_cutoff:
+                            _seen.add(_t)
+                            _items.append(_n)
+                _nl_by_cat[_cat] = _items[:6]
+
+            _nl_rss     = [a for a in _fetch_policy_rss()
+                           if not a.get("is_dummy") and _safe_parse_dt(a.get("date","")) >= _nl_cutoff]
+            _nl_notices = [nc for nc in _load_notices()
+                           if _safe_parse_dt(nc.get("date","")) >= _nl_cutoff]
+            _nl_smp     = _load_smp_rec()[:10]
+
+            # 행사 파싱
+            _nl_events = []
+            for _line in nl_events_raw.strip().split("\n"):
+                _parts = [p.strip() for p in _line.split(",")]
+                if len(_parts) >= 2 and _parts[0]:
+                    _nl_events.append({
+                        "date":  _parts[0],
+                        "name":  _parts[1] if len(_parts) > 1 else "",
+                        "place": _parts[2] if len(_parts) > 2 else "",
+                        "host":  _parts[3] if len(_parts) > 3 else "",
+                    })
+
+            _nl_html = _generate_newsletter_html(
+                vol=int(nl_vol),
+                issue_date_str=nl_date.strftime("%Y. %m. %d"),
+                news_by_cat=_nl_by_cat,
+                rss_rows=_nl_rss,
+                notice_rows=_nl_notices,
+                smp_records=_nl_smp,
+                issue_bg=nl_issue_bg,
+                issue_content=nl_issue_content,
+                events=_nl_events,
+            )
+            st.session_state["nl_generated_html"] = _nl_html
+            st.success("✅ 생성 완료! 아래 버튼으로 다운로드하세요.")
+
+        if "nl_generated_html" in st.session_state:
+            _fname = f"{get_kst_now().strftime('%Y-%m-%d')}_RE_Monday_Vol{st.session_state.get('nl_vol',1)}.html"
+            st.download_button(
+                label="📥 HTML 다운로드",
+                data=st.session_state["nl_generated_html"].encode("utf-8"),
+                file_name=_fname,
+                mime="text/html",
+                use_container_width=True,
+                key="nl_dl_btn",
+            )
+
     st.markdown("---")
     st.markdown(
         "<p style='color:#8892b0; font-size:0.8rem;'>"
-        "신재생에너지 사업개발팀<br>사내 대시보드 v0.7.0</p>",
+        "신재생에너지 사업개발팀<br>사내 대시보드 v0.8.0</p>",
         unsafe_allow_html=True,
     )
 
