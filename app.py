@@ -10,7 +10,7 @@
 import sys
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta, time as dtime
+from datetime import datetime, timedelta, time as dtime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 from utils.news_crawler import search_naver_news, save_to_archive, to_csv_bytes
@@ -34,6 +34,12 @@ _PERIOD_DELTA = {
 }
 
 
+def get_kst_now() -> datetime:
+    """Returns the current naive datetime in KST (UTC+9)."""
+    kst = timezone(timedelta(hours=9))
+    return datetime.now(kst).replace(tzinfo=None)
+
+
 def _safe_parse_dt(date_str: str) -> datetime:
     # 뉴스 크롤러: "2026-03-06 14:30" 형식 (날짜+시간)
     # RSS 크롤러:  "2026-03-06" 형식 (날짜만) → 두 형식 모두 지원
@@ -45,14 +51,14 @@ def _safe_parse_dt(date_str: str) -> datetime:
     return datetime.min
 
 
-def _filter_by_period(items: list, period: str) -> list:
+def _filter_by_period(items: list, period: str, date_key: str = "date") -> list:
     """기사 리스트를 선택 기간으로 필터링합니다."""
     if period == "전체":
         return items
-    cutoff = datetime.now() - _PERIOD_DELTA.get(period, timedelta(hours=72))
+    cutoff = get_kst_now() - _PERIOD_DELTA.get(period, timedelta(hours=72))
     return [
         item for item in items
-        if _safe_parse_dt(item.get("date", "")) >= cutoff
+        if _safe_parse_dt(item.get(date_key, "")) >= cutoff
     ]
 
 
@@ -539,14 +545,14 @@ with tab1:
                 if item["link"] else item["name"]
             )
             org_icon = "⚖️" if target == "law" else "📍"
-            st.markdown(
-                f"""<div class="card">
-                    <p class="meta">{org_icon} {item['org']} &nbsp;·&nbsp; 공포 {item['date']} &nbsp;·&nbsp; 시행 {item['enforce_date']}</p>
-                    <h4>{name_html}</h4>
-                    <p><span style="color:#64ffda; font-size:0.82rem;">{item['type']}</span></p>
-                </div>""",
-                unsafe_allow_html=True,
+            html_str = (
+                f'<div class="card">'
+                f'<p class="meta">{org_icon} {item["org"]} &nbsp;·&nbsp; 공포 {item["date"]} &nbsp;·&nbsp; 시행 {item["enforce_date"]}</p>'
+                f'<h4>{name_html}</h4>'
+                f'<p><span style="color:#64ffda; font-size:0.82rem;">{item["type"]}</span></p>'
+                f'</div>'
             )
+            st.markdown(html_str, unsafe_allow_html=True)
 
             item_id     = item["mst"] or item["name"]
             btn_key     = f"{section_key_prefix}_btn_{item_id}"
@@ -747,7 +753,7 @@ with tab2:
 
         # 기간 필터 적용
         if period != "전체" and not combined_raw.empty:
-            _cutoff = datetime.now() - _PERIOD_DELTA[period]
+            _cutoff = get_kst_now() - _PERIOD_DELTA[period]
             combined_raw = combined_raw[
                 combined_raw["날짜"].apply(lambda d: _safe_parse_dt(d) >= _cutoff)
             ]
@@ -782,7 +788,7 @@ with tab2:
         # 다운로드 버튼
         col_dl, col_info = st.columns([2, 3])
         with col_dl:
-            today_str = datetime.today().strftime("%Y-%m-%d")
+            today_str = get_kst_now().strftime("%Y-%m-%d")
             dl_df = display_df[["키워드", "날짜", "언론사", "제목", "요약", "링크"]] if not display_df.empty else display_df
             st.download_button(
                 label="📥 오늘의 전체 뉴스 엑셀(CSV) 다운로드",
@@ -878,15 +884,14 @@ with tab2:
                     # ── 뉴스 카드 목록 ────────────────────────────────
                     with st.container(height=400):
                         for item in kw_news:
-                            st.markdown(
-                                f"""<div class="card">
-                                    <p class="meta">🏢 {item['source']} &nbsp;·&nbsp; {item['date']}</p>
-                                    <h4><a href="{item['link']}" target="_blank"
-                                        style="color:#ccd6f6; text-decoration:none;">{item['title']}</a></h4>
-                                    <p>{item['summary']}</p>
-                                </div>""",
-                                unsafe_allow_html=True,
+                            html_str = (
+                                f'<div class="card">'
+                                f'<p class="meta">🏢 {item["source"]} &nbsp;·&nbsp; {item["date"]}</p>'
+                                f'<h4><a href="{item["link"]}" target="_blank" style="color:#ccd6f6; text-decoration:none;">{item["title"]}</a></h4>'
+                                f'<p>{item["summary"]}</p>'
+                                f'</div>'
                             )
+                            st.markdown(html_str, unsafe_allow_html=True)
                 else:
                     st.markdown(
                         "<p style='color:#8892b0; font-size:0.9rem; padding:0.5rem 0;'>"
@@ -930,15 +935,14 @@ with tab2:
                         unsafe_allow_html=True,
                     )
                     for item in manual_results:
-                        st.markdown(
-                            f"""<div class="card">
-                                <p class="meta">🏢 {item['source']} &nbsp;·&nbsp; {item['date']}</p>
-                                <h4><a href="{item['link']}" target="_blank"
-                                    style="color:#ccd6f6; text-decoration:none;">{item['title']}</a></h4>
-                                <p>{item['summary']}</p>
-                            </div>""",
-                            unsafe_allow_html=True,
+                        html_str = (
+                            f'<div class="card">'
+                            f'<p class="meta">🏢 {item["source"]} &nbsp;·&nbsp; {item["date"]}</p>'
+                            f'<h4><a href="{item["link"]}" target="_blank" style="color:#ccd6f6; text-decoration:none;">{item["title"]}</a></h4>'
+                            f'<p>{item["summary"]}</p>'
+                            f'</div>'
                         )
+                        st.markdown(html_str, unsafe_allow_html=True)
                 else:
                     st.info("검색 결과가 없습니다. 다른 키워드로 시도해 보세요.")
             except ValueError as e:
@@ -986,11 +990,12 @@ with tab3:
     # ── 데이터 사전 수집 (통합 CSV용) ─────────────────────────────────
     with st.spinner("데이터 수집 중…"):
         raw_rss_articles = _fetch_policy_rss()
-        rss_articles     = _filter_by_period(raw_rss_articles, policy_period)
-        bills            = _fetch_assembly_bills()
+        rss_articles     = _filter_by_period(raw_rss_articles, policy_period, date_key="date")
+        raw_bills        = _fetch_assembly_bills()
+        bills            = _filter_by_period(raw_bills, policy_period, date_key="propose_date")
 
     # ── 통합 CSV 다운로드 버튼 (Tab 2와 동일한 방식 — 상단 1개) ──────
-    today_str = datetime.today().strftime("%Y-%m-%d")
+    today_str = get_kst_now().strftime("%Y-%m-%d")
     rss_rows = [{
         "구분": "보도자료",
         "날짜": a.get("date", ""),
@@ -1076,14 +1081,14 @@ with tab3:
                     with st.container(height=400):
                         for article in articles:
                             if article["is_dummy"]:
-                                st.markdown(
-                                    f"""<div class="coming-card" style="margin-bottom:0.5rem;">
-                                        <p class="meta" style="color:#ffc837;">🔧 {article['source']} · {article['date']}</p>
-                                        <h4 style="color:#ffc837; font-size:0.9rem;">{article['title']}</h4>
-                                        <p>{article['summary']}</p>
-                                    </div>""",
-                                    unsafe_allow_html=True,
+                                html_str = (
+                                    f'<div class="coming-card" style="margin-bottom:0.5rem;">'
+                                    f'<p class="meta" style="color:#ffc837;">🔧 {article["source"]} · {article["date"]}</p>'
+                                    f'<h4 style="color:#ffc837; font-size:0.9rem;">{article["title"]}</h4>'
+                                    f'<p>{article["summary"]}</p>'
+                                    f'</div>'
                                 )
+                                st.markdown(html_str, unsafe_allow_html=True)
                             else:
                                 # 첨부파일: 개별 캐시 함수로 분리 호출 (RSS 수집과 독립)
                                 attachments = _fetch_attachments_cached(article["link"])
@@ -1104,18 +1109,15 @@ with tab3:
                                         f'{att_links}</div>'
                                     )
 
-                                st.markdown(
-                                    f"""<div class="card" style="margin-bottom:0.5rem;">
-                                        <p class="meta">🏢 {article['source']} · {article['date']}</p>
-                                        <h4 style="font-size:0.92rem;">
-                                            <a href="{article['link']}" target="_blank"
-                                               style="color:#ccd6f6; text-decoration:none;">{article['title']}</a>
-                                        </h4>
-                                        <p>{article['summary'][:120]}…</p>
-                                        {att_html}
-                                    </div>""",
-                                    unsafe_allow_html=True,
+                                html_str = (
+                                    f'<div class="card" style="margin-bottom:0.5rem;">'
+                                    f'<p class="meta">🏢 {article["source"]} · {article["date"]}</p>'
+                                    f'<h4 style="font-size:0.92rem;"><a href="{article["link"]}" target="_blank" style="color:#ccd6f6; text-decoration:none;">{article["title"]}</a></h4>'
+                                    f'<p>{article["summary"][:120]}…</p>'
+                                    f'{att_html}'
+                                    f'</div>'
                                 )
+                                st.markdown(html_str, unsafe_allow_html=True)
         else:
             st.info("수집된 보도자료가 없습니다.")
 
@@ -1152,24 +1154,14 @@ with tab3:
             for bill in bills:
                 mock_badge = " [MOCK]" if bill["is_mock"] else ""
                 status_color = status_colors.get(bill["status"], "#8892b0")
-                st.markdown(
-                    f"""<div class="card" style="margin-bottom:0.6rem;">
-                        <p class="meta">
-                            📋 {bill['committee']}{mock_badge} · {bill['propose_date']}
-                        </p>
-                        <h4 style="font-size:0.9rem;">
-                            <a href="{bill['link']}" target="_blank"
-                               style="color:#ccd6f6; text-decoration:none;">{bill['title']}</a>
-                        </h4>
-                        <p>
-                            👤 {bill['proposer']}&nbsp;&nbsp;
-                            <span style="color:{status_color}; font-weight:700;">
-                                ● {bill['status']}
-                            </span>
-                        </p>
-                    </div>""",
-                    unsafe_allow_html=True,
+                html_str = (
+                    f'<div class="card" style="margin-bottom:0.6rem;">'
+                    f'<p class="meta">📋 {bill["committee"]}{mock_badge} · {bill["propose_date"]}</p>'
+                    f'<h4 style="font-size:0.9rem;"><a href="{bill["link"]}" target="_blank" style="color:#ccd6f6; text-decoration:none;">{bill["title"]}</a></h4>'
+                    f'<p>👤 {bill["proposer"]}&nbsp;&nbsp;<span style="color:{status_color}; font-weight:700;">● {bill["status"]}</span></p>'
+                    f'</div>'
                 )
+                st.markdown(html_str, unsafe_allow_html=True)
         else:
             st.info("수집된 법안이 없습니다.")
 
@@ -1183,6 +1175,7 @@ import json as _json
 
 _NOTICES_FILE    = Path(__file__).parent / "data" / "notices.json"
 _ATTACHMENTS_DIR = Path(__file__).parent / "data" / "attachments"
+_SMP_REC_FILE    = Path(__file__).parent / "data" / "smp_rec.json"
 _NOTICES_FILE.parent.mkdir(parents=True, exist_ok=True)
 _ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1204,7 +1197,7 @@ _T4_ORG_DISPLAY = {
 }
 _T4_ORG_URL = {
     "kpx":     "https://www.kpx.or.kr",
-    "kemco":   "https://www.kemco.or.kr",
+    "kemco":   "https://www.energy.or.kr",
     "kepco":   "https://home.kepco.co.kr",
     "eleccom": "https://www.korec.go.kr",
     "shinan":  "https://www.shinan.go.kr",
@@ -1224,6 +1217,19 @@ def _save_notices(notices: list[dict]) -> None:
     """공지사항 목록을 data/notices.json 에 저장합니다."""
     _NOTICES_FILE.write_text(_json.dumps(notices, ensure_ascii=False, indent=2), encoding="utf-8")
 
+def _load_smp_rec() -> list[dict]:
+    """data/smp_rec.json 에서 SMP/REC 기록을 로드합니다."""
+    if _SMP_REC_FILE.exists():
+        try:
+            return _json.loads(_SMP_REC_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
+
+def _save_smp_rec(records: list[dict]) -> None:
+    """SMP/REC 기록을 data/smp_rec.json 에 저장합니다."""
+    _SMP_REC_FILE.write_text(_json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
 with tab4:
     st.markdown("### 📡 유관기관 공지사항")
     st.markdown(
@@ -1240,7 +1246,7 @@ with tab4:
     # ── 9:30 AM 일별 표시 필터 ───────────────────────────────────────────
     # 오전 9:30 이전에 등록된 공지는 대시보드에서 숨깁니다.
     # data/notices.json과 data/attachments/에는 영구 보존됩니다.
-    _now = datetime.now()
+    _now = get_kst_now()
     _today_930 = datetime.combine(_now.date(), dtime(9, 30))
     _display_cutoff = _today_930 if _now >= _today_930 else _today_930 - timedelta(days=1)
     _cutoff_str     = _display_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
@@ -1276,7 +1282,7 @@ with tab4:
                 "날짜":     n["date"],
                 "링크":     n["link"],
             } for n in dl_notices])
-            today_str = datetime.today().strftime("%Y-%m-%d")
+            today_str = get_kst_now().strftime("%Y-%m-%d")
             st.download_button(
                 label="📥 유관기관 공지 전체 CSV 다운로드",
                 data=to_csv_bytes(dl_df_all),
@@ -1307,6 +1313,79 @@ with tab4:
                 </div>""",
                 unsafe_allow_html=True,
             )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── SMP/REC 데이터 로드 및 UI ────────────────────────────────────────────────
+    smp_records = _load_smp_rec()
+    
+    st.markdown('<p class="section-title">📉 전력거래소(KPX) SMP 및 REC 단가 추이</p>', unsafe_allow_html=True)
+    with st.expander("➕ 단가 수동 입력하기", expanded=False):
+        c_sr_d, c_sr_smp, c_sr_rec, c_sr_btn = st.columns([2, 2, 2, 1])
+        with c_sr_d:
+            smp_date = st.date_input("기준 일자", key="smp_date")
+        with c_sr_smp:
+            smp_val = st.number_input("육지 SMP (원/kWh)", min_value=0.0, step=0.1, format="%.2f", key="smp_val")
+        with c_sr_rec:
+            rec_val = st.number_input("육지 REC (원/REC)", min_value=0.0, step=100.0, format="%.0f", key="rec_val")
+        with c_sr_btn:
+            st.markdown("<div style='margin-top:1.6rem;'></div>", unsafe_allow_html=True)
+            if st.button("✅ 저장"):
+                date_str = smp_date.strftime("%Y-%m-%d")
+                # Remove exact duplicate date if exists, then append
+                smp_records = [r for r in smp_records if r["date"] != date_str]
+                smp_records.append({
+                    "date": date_str,
+                    "SMP": smp_val,
+                    "REC": rec_val
+                })
+                smp_records.sort(key=lambda x: x["date"], reverse=True)
+                _save_smp_rec(smp_records)
+                st.rerun()
+                
+    if smp_records:
+        # 차트용 데이터프레임
+        sr_df = pd.DataFrame(smp_records)
+        sr_df["date"] = pd.to_datetime(sr_df["date"])
+        sr_df = sr_df.sort_values("date")
+        
+        c_ch_opt, c_ch_dl = st.columns([4, 1])
+        with c_ch_opt:
+            chart_period = st.radio("그래프 표시 기간", ["1주일", "1개월", "1년", "전체"], horizontal=True, key="sr_period")
+        
+        # 필터링
+        if chart_period != "전체":
+            if chart_period == "1주일":
+                ch_cutoff = get_kst_now() - timedelta(days=7)
+            elif chart_period == "1개월":
+                ch_cutoff = get_kst_now() - timedelta(days=30)
+            elif chart_period == "1년":
+                ch_cutoff = get_kst_now() - timedelta(days=365)
+            # Timezone aware comparison fix
+            ch_cutoff = ch_cutoff.replace(tzinfo=None)
+            filtered_sr = sr_df[sr_df["date"] >= ch_cutoff]
+        else:
+            filtered_sr = sr_df
+            
+        with c_ch_dl:
+            # SMP/REC 전용 CSV 다운로드
+            st.markdown("<div style='margin-top:0.5rem;'></div>", unsafe_allow_html=True)
+            dl_sr_df = filtered_sr.copy()
+            dl_sr_df["date"] = dl_sr_df["date"].dt.strftime("%Y-%m-%d")
+            today_str = get_kst_now().strftime("%Y-%m-%d")
+            st.download_button(
+                label="📥 필터링된 기간 CSV",
+                data=to_csv_bytes(dl_sr_df),
+                file_name=f"{today_str}_SMP_REC_단가.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="dl_sr_notices",
+            )
+            
+        if not filtered_sr.empty:
+            st.line_chart(filtered_sr.set_index("date")[["SMP", "REC"]], use_container_width=True)
+        else:
+            st.info("해당 기간에 등록된 단가 데이터가 없습니다.")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1352,9 +1431,14 @@ with tab4:
             if not f_title.strip():
                 st.error("제목을 입력해 주세요.")
             else:
-                # org_key 역방향 조회
-                f_org_key = next((k for k, v in _T4_ORG_DISPLAY.items() if v == f_org), "etc")
-                added_at  = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                # org_key 역방향 조회 (선택된 기관 display name으로 매핑)
+                f_org_key = "etc"
+                for k, v in _T4_ORG_DISPLAY.items():
+                    if v == f_org:
+                        f_org_key = k
+                        break
+                
+                added_at  = get_kst_now().strftime("%Y-%m-%dT%H:%M:%S")
 
                 # 첨부파일 저장
                 saved_files = []
@@ -1423,18 +1507,13 @@ with tab4:
                             f' &nbsp;<span style="color:#64ffda; font-size:0.78rem;">📎 {len(att_list)}개</span>'
                             if att_list else ""
                         )
-                        st.markdown(
-                            f"""<div class="card" style="margin-bottom:0.4rem;">
-                                <p class="meta">
-                                    {icon} {org_name}
-                                    &nbsp;·&nbsp; {notice.get('category','공지')}
-                                    &nbsp;·&nbsp; {notice['date']}
-                                    {att_badge}
-                                </p>
-                                <h4 style="font-size:0.92rem;">{title_html}</h4>
-                            </div>""",
-                            unsafe_allow_html=True,
+                        html_str = (
+                            f'<div class="card" style="margin-bottom:0.4rem;">'
+                            f'<p class="meta">{icon} {org_name} &nbsp;·&nbsp; {notice.get("category","공지")} &nbsp;·&nbsp; {notice["date"]}{att_badge}</p>'
+                            f'<h4 style="font-size:0.92rem;">{title_html}</h4>'
+                            f'</div>'
                         )
+                        st.markdown(html_str, unsafe_allow_html=True)
                         # 첨부파일 개별 다운로드 버튼
                         for att in att_list:
                             att_path = _ATTACHMENTS_DIR / att["saved"]
@@ -1467,7 +1546,7 @@ with tab4:
                 <li><b>📊 KPX (전력거래소)</b> — SMP 산정 결과, 재생에너지 입찰공고
                     &nbsp;<a href="https://www.kpx.or.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
                 <li><b>🌿 한국에너지공단</b> — RPS 의무량, REC 발급 기준, 보조금 공모
-                    &nbsp;<a href="https://www.kemco.or.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
+                    &nbsp;<a href="https://www.energy.or.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
                 <li><b>⚡ 한전 (KEPCO)</b> — 계통 연계 기술기준, 전기공급약관, 접속 신청
                     &nbsp;<a href="https://home.kepco.co.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
                 <li><b>⚖️ 전기위원회</b> — 발전사업 허가·심의 결과, 허가 기준 개정

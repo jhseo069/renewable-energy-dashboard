@@ -1,6 +1,6 @@
 # 신재생에너지 사업개발 대시보드 — 프로젝트 메모리
 
-> **마지막 업데이트:** 2026-03-04
+> **마지막 업데이트:** 2026-03-06
 > **작성 목적:** 대화 컨텍스트 초기화 후에도 다음 작업자(AI 포함)가 현재 상태를 100% 파악하고 즉시 이어서 작업할 수 있도록 작성한 전체 현황 문서입니다.
 
 ---
@@ -16,7 +16,7 @@
 | 실행 명령 | `streamlit run app.py` |
 | 로컬 URL | `http://localhost:8501` (포트는 상황에 따라 8502~8504로 변경될 수 있음) |
 | 클라우드 URL | `https://renewable-energy-dashboard-nsmgneobdtz3xqpddasevz.streamlit.app/` |
-| 버전 | v0.2.0 |
+| 버전 | v0.4.0 |
 
 ---
 
@@ -74,9 +74,12 @@ ASSEMBLY_API_KEY=                          # 국회 오픈 API (미발급 → Mo
 ## 4. 4탭 UI 구성 현황
 
 ### Tab 1: 📜 입지/규제 분석
-- **상태:** UI 레이아웃 완성, API 연동 미구현 (Coming Soon)
-- **목표:** 국가법령정보센터 API로 지자체 조례 검색 → Claude AI 자동 분석
-- **준비 필요:** `.env`에 `LAW_API_KEY`, `ANTHROPIC_API_KEY` 설정 후 `utils/law_api.py` 구현
+- **상태:** ✅ **법령 API 연동 완료 (v0.4.0, 2026-03-06)** / Claude AI 분석은 예정
+- `utils/law_api.py` 국가법령정보센터 자치법규 검색 실 연동
+- 검색 방식: **법규명(조례 이름)으로만 검색** — "태양광", "풍력발전" 등 키워드 권장
+- **Cloud 제한**: law.go.kr는 등록된 IP/도메인만 허용. Streamlit Cloud 도메인 등록 완료(2026-03-04)하였으나 테스트 필요
+- 실제 응답 구조: `OrdinSearch` → `law` → `totalCnt` (이전 가정과 다름 — 수정 완료)
+- **다음 단계:** Cloud 접근 확인 후 `ANTHROPIC_API_KEY` 연동하여 조례 원문 AI 분석 추가
 
 ### Tab 2: 📰 일일 뉴스 모니터링
 - **상태:** 완전 구현 완료 (핵심 기능)
