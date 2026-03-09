@@ -10,7 +10,7 @@
 import sys
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dtime
 from pathlib import Path
 from dotenv import load_dotenv
 from utils.news_crawler import search_naver_news, save_to_archive, to_csv_bytes
@@ -1237,6 +1237,22 @@ with tab4:
     # ── 공지사항 데이터 로드 ─────────────────────────────────────────────
     all_notices = _load_notices()
 
+    # ── 9:30 AM 일별 표시 필터 ───────────────────────────────────────────
+    # 오전 9:30 이전에 등록된 공지는 대시보드에서 숨깁니다.
+    # data/notices.json과 data/attachments/에는 영구 보존됩니다.
+    _now = datetime.now()
+    _today_930 = datetime.combine(_now.date(), dtime(9, 30))
+    _display_cutoff = _today_930 if _now >= _today_930 else _today_930 - timedelta(days=1)
+    _cutoff_str     = _display_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
+    display_notices = [n for n in all_notices if n.get("added_at", "") >= _cutoff_str]
+    archived_count  = len(all_notices) - len(display_notices)
+
+    if archived_count > 0:
+        st.info(
+            f"📦 오전 9:30 이전 공지 **{archived_count}건**은 보관 처리되어 숨겨졌습니다. "
+            f"(data/notices.json에 영구 저장됨)"
+        )
+
     # ── 상단 컨트롤: 기관 필터 + 전체 CSV 다운로드 ─────────────────────
     col_n_filter, col_n_dl = st.columns([3, 2])
     with col_n_filter:
@@ -1251,7 +1267,7 @@ with tab4:
 
     with col_n_dl:
         # 전체 CSV 다운로드 (Tab 2 방식 — 1개 버튼)
-        dl_notices = [n for n in all_notices if not selected_org_key or n["org_key"] == selected_org_key]
+        dl_notices = [n for n in display_notices if not selected_org_key or n["org_key"] == selected_org_key]
         if dl_notices:
             dl_df_all = pd.DataFrame([{
                 "기관명":   _T4_ORG_DISPLAY.get(n["org_key"], n["org_key"]),
@@ -1273,11 +1289,11 @@ with tab4:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # KPI 행
-    filtered_for_kpi = [n for n in all_notices if not selected_org_key or n["org_key"] == selected_org_key]
+    filtered_for_kpi = [n for n in display_notices if not selected_org_key or n["org_key"] == selected_org_key]
     kpi_cols = st.columns(4)
     kpi_data_n = [
         ("📋", str(len(filtered_for_kpi)), "등록된 공지"),
-        ("🏢", str(len(set(n["org_key"] for n in all_notices))), "등록 기관 수"),
+        ("🏢", str(len(set(n["org_key"] for n in display_notices))), "등록 기관 수"),
         ("📅", filtered_for_kpi[0]["date"] if filtered_for_kpi else "—", "최신 공지 날짜"),
         ("🔗", "6개", "연동 기관"),
     ]
@@ -1368,7 +1384,7 @@ with tab4:
     org_keys_to_show = [selected_org_key] if selected_org_key else list(_T4_ORG_DISPLAY.keys())
 
     for org_key in org_keys_to_show:
-        org_notices = [n for n in all_notices if n["org_key"] == org_key]
+        org_notices = [n for n in display_notices if n["org_key"] == org_key]
         icon     = _T4_ORG_ICON.get(org_key, "🏢")
         org_name = _T4_ORG_DISPLAY.get(org_key, org_key)
         org_url  = _T4_ORG_URL.get(org_key, "")
