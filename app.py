@@ -272,9 +272,9 @@ st.markdown(
         color: #ccd6f6;
     }
 
-    /* 익스팬더 (키워드별 뉴스 브리핑) */
+    /* ── 익스팬더 공통 (Tab 1~4 전체 적용) ── */
     [data-testid="stExpander"] {
-        background: rgba(255,255,255,0.04);
+        background: rgba(20,18,50,0.95) !important;
         border: 1px solid rgba(255,255,255,0.1) !important;
         border-radius: 12px !important;
         margin-bottom: 0.4rem;
@@ -282,9 +282,21 @@ st.markdown(
     [data-testid="stExpander"] summary {
         padding: 0.75rem 1rem;
         border-radius: 12px;
+        background: rgba(20,18,50,0.95) !important;
     }
+    /* 열린 상태에서도 배경 어둡게 유지 */
+    details[open],
+    details[open] > summary {
+        background: rgba(20,18,50,0.95) !important;
+    }
+    details[open] > summary {
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    /* 닫힘/열림 모두 타이틀 색상 보장 */
     [data-testid="stExpander"] summary p,
-    [data-testid="stExpander"] summary span {
+    [data-testid="stExpander"] summary span,
+    details[open] > summary p,
+    details[open] > summary span {
         color: #e2e8f0 !important;
         font-weight: 700 !important;
         font-size: 1rem !important;
@@ -296,6 +308,87 @@ st.markdown(
     [data-testid="stExpander"] summary:hover span {
         color: #00c9ff !important;
     }
+
+    /* ── 익스팬더 내부 본문 전체 텍스트 가시성 (Tab 1~4) ── */
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"],
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] li,
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] strong,
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] em,
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] h1,
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] h2,
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] h3,
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] h4 {
+        color: #ccd6f6 !important;
+    }
+
+    /* ── 탭 전체 일반 텍스트 (st.write, st.markdown 등) ── */
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stMarkdownContainer"] span {
+        color: #ccd6f6;
+    }
+
+    /* ── 폼 요소 레이블 ── */
+    .stSelectbox label,
+    .stRadio label,
+    .stCheckbox label,
+    .stTextInput label,
+    .stDateInput label,
+    .stNumberInput label {
+        color: #ccd6f6 !important;
+    }
+
+    /* ── 셀렉트박스 다크 테마 ── */
+    [data-testid="stSelectbox"] > div > div {
+        background: rgba(255,255,255,0.06) !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        border-radius: 10px !important;
+        color: #ccd6f6 !important;
+    }
+    [data-testid="stSelectbox"] > div > div > div {
+        color: #ccd6f6 !important;
+    }
+    /* 셀렉트박스 드롭다운 메뉴 */
+    [data-testid="stSelectbox"] ul {
+        background: #1a1a3e !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+    }
+    [data-testid="stSelectbox"] li {
+        color: #ccd6f6 !important;
+    }
+    [data-testid="stSelectbox"] li:hover {
+        background: rgba(0,201,255,0.15) !important;
+    }
+
+    /* ── 라디오 버튼 다크 테마 ── */
+    [data-testid="stRadio"] > div {
+        background: transparent !important;
+    }
+    [data-testid="stRadio"] label {
+        color: #ccd6f6 !important;
+    }
+    [data-testid="stRadio"] span {
+        color: #ccd6f6 !important;
+    }
+
+    /* ── 2차 버튼 (갱신·CSV 다운로드 등 흰 배경 버튼) 다크 테마 ── */
+    [data-testid="stDownloadButton"] > button,
+    [data-testid="stFormSubmitButton"] > button {
+        background: rgba(255,255,255,0.06) !important;
+        border: 1px solid rgba(255,255,255,0.15) !important;
+        color: #ccd6f6 !important;
+        border-radius: 10px !important;
+    }
+    [data-testid="stDownloadButton"] > button:hover,
+    [data-testid="stFormSubmitButton"] > button:hover {
+        background: rgba(255,255,255,0.12) !important;
+        color: #00c9ff !important;
+    }
+
+    /* ── 메트릭 (st.metric) ── */
+    [data-testid="stMetricLabel"] { color: #8892b0 !important; }
+    [data-testid="stMetricValue"] { color: #ccd6f6 !important; }
     </style>
     """,
     unsafe_allow_html=True,

@@ -8,7 +8,7 @@ Layer 3 (Execution) — 결정론적 AI 분석 스크립트
   - Tab 2: 뉴스 키워드별 동향 분석
 
 사용 패키지: google-genai (신버전 — google-generativeai 대체)
-사용 모델  : gemini-2.5-flash
+사용 모델  : gemini-3-flash-preview
 예외 처리  : API 키 오류 / 원문 수집 실패 / 생성 오류 각각 독립 처리
 """
 
@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 _GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-_MODEL_NAME     = "gemini-2.5-flash"
+_MODEL_NAME     = "gemini-3-flash-preview"
 
 # ── 조례 분석 시스템 프롬프트 ────────────────────────────────────────
 _ORDINANCE_SYSTEM_PROMPT = """당신은 신재생에너지(태양광·풍력·해상풍력·ESS) 사업개발 전문 컨설턴트입니다.
