@@ -1,30 +1,34 @@
 """
-국가법령정보센터 자치법규(조례) 검색 API 연동
+국가법령정보센터 법령·자치법규 검색 API 연동
 ================================================
 - API 엔드포인트: https://www.law.go.kr/DRF/lawSearch.do
 - 인증: OC 파라미터에 API 키 전달 (무료 발급)
 
-[실제 응답 구조 - 2026-03-06 확인]
+[자치법규(조례) 응답 구조 - OrdinSearch]
 {
   "OrdinSearch": {
-    "totalCnt": "18",          ← 전체 건수
-    "law": [ ... ] or { ... }  ← 단건이면 dict, 다건이면 list
+    "totalCnt": "18",
+    "law": [ ... ]
   }
 }
+필드: 자치법규명, 지자체기관명, 자치법규종류, 공포일자, 시행일자,
+      자치법규일련번호, 자치법규상세링크
 
-[각 법규 항목 필드]
-  "자치법규명"        ← 조례 이름
-  "지자체기관명"      ← 지자체명 (예: 전라남도, 신안군)
-  "자치법규종류"      ← 조례 / 규칙 등
-  "공포일자"          ← YYYYMMDD
-  "시행일자"          ← YYYYMMDD
-  "자치법규일련번호"  ← 상세페이지 URL 구성에 사용
-  "자치법규상세링크"  ← /DRF/lawService.do?... (HTML 원문)
+[국가법령 응답 구조 - LawSearch]
+{
+  "LawSearch": {
+    "totalCnt": "3",
+    "law": [ ... ]
+  }
+}
+필드: 법령명한글, 법령구분명, 소관부처명, 공포일자, 시행일자,
+      법령일련번호, 법령상세링크
 
 [검색 특성]
-  - section=ordinNm: 법규명(조례 이름)만 검색 (기본값)
-  - "이격거리", "소음" 같은 내용어는 결과 없음 → 법규명 키워드로 검색해야 함
-  - 권장 검색어: "태양광", "풍력", "ESS", "해상풍력", "신재생에너지" 등
+  - target=ordin: 자치법규(조례·규칙) 검색
+  - target=law:   국가법령(법률·시행령·시행규칙) 검색
+  - 법규명 검색만 지원 — "이격거리", "소음" 같은 내용어 검색 불가
+  - 권장 검색어: "태양광", "풍력", "ESS", "농지법", "전기사업법", "환경영향평가법" 등
 """
 
 import os
@@ -147,6 +151,91 @@ def search_ordinances(query: str, display: int = 20, page: int = 1) -> dict:
             "type":         item.get("자치법규종류", "조례"),
             "mst":          mst,
             "link":         link,
+        })
+
+    return {"total": total, "items": items}
+
+
+def search_national_laws(query: str, display: int = 10, page: int = 1) -> dict:
+    """
+    국가법령정보센터에서 국가법령(법률·시행령·시행규칙)을 법령명으로 검색합니다.
+
+    Args:
+        query:   검색어 (예: "농지법", "전기사업법", "환경영향평가법", "신재생에너지")
+        display: 페이지당 결과 수 (최대 20)
+        page:    페이지 번호 (1부터 시작)
+
+    Returns:
+        {
+            "total": int,
+            "items": [
+                {
+                    "name":      str,  ← 법령명한글
+                    "org":       str,  ← 소관부처명
+                    "date":      str,  ← 공포일자 (YYYY-MM-DD)
+                    "enforce_date": str,  ← 시행일자 (YYYY-MM-DD)
+                    "type":      str,  ← 법령구분명 (법률/대통령령/부령 등)
+                    "mst":       str,  ← 법령일련번호
+                    "link":      str,  ← 국가법령정보센터 상세 HTML URL
+                    "target":    "law",
+                },
+                ...
+            ]
+        }
+
+    Raises:
+        ValueError:           LAW_API_KEY 미설정 시
+        requests.HTTPError:   API 호출 실패 시
+    """
+    if not LAW_API_KEY:
+        raise ValueError("LAW_API_KEY가 .env에 설정되지 않았습니다.")
+
+    resp = requests.get(
+        _SEARCH_URL,
+        params={
+            "OC":      LAW_API_KEY,
+            "target":  "law",     # 국가법령 검색
+            "query":   query,
+            "type":    "JSON",
+            "display": display,
+            "page":    page,
+        },
+        headers=_REQUEST_HEADERS,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    # 오류 감지
+    if "result" in data:
+        raise ValueError(
+            f"법령 API 접근 오류: {data.get('result', '')} "
+            "— 서버 IP/도메인 등록이 필요할 수 있습니다."
+        )
+
+    # 국가법령 응답 루트 키: "LawSearch"
+    root  = data.get("LawSearch", {})
+    total = int(root.get("totalCnt", 0))
+
+    raw = root.get("law", [])
+    if isinstance(raw, dict):
+        raw = [raw]
+
+    items = []
+    for item in raw:
+        mst        = item.get("법령일련번호", "")
+        detail_rel = item.get("법령상세링크", "")
+        link = (_BASE_URL + detail_rel) if detail_rel.startswith("/") else detail_rel
+
+        items.append({
+            "name":         item.get("법령명한글", ""),
+            "org":          item.get("소관부처명", ""),
+            "date":         _fmt_date(item.get("공포일자", "")),
+            "enforce_date": _fmt_date(item.get("시행일자", "")),
+            "type":         item.get("법령구분명", "법률"),
+            "mst":          mst,
+            "link":         link,
+            "target":       "law",
         })
 
     return {"total": total, "items": items}

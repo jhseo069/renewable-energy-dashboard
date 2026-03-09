@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 from utils.news_crawler import search_naver_news, save_to_archive, to_csv_bytes
-from utils.law_api import search_ordinances, get_server_ip
+from utils.law_api import search_ordinances, search_national_laws, get_server_ip
 
 # execution/ 디렉토리를 Python 경로에 추가
 # app.py와 같은 레벨의 execution/ 폴더에서 스크립트를 import하기 위함
@@ -452,11 +452,12 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # TAB 1 : 입지/규제 분석
 # =============================================
 with tab1:
-    st.markdown("### 📜 지자체 조례 · 입지 규제 분석")
+    st.markdown("### 📜 입지 · 규제 분석 (국가법령 + 지자체 조례)")
     st.markdown(
         "<p style='color:#8892b0;'>"
-        "국가법령정보센터 API로 지자체 조례를 검색합니다. "
-        "조례 검색 후 각 카드의 <b>🤖 Gemini AI 분석</b> 버튼으로 핵심 규제를 즉시 요약합니다."
+        "국가법령정보센터 API로 <b>국가법령(농지법·환경영향평가법 등)</b>과 "
+        "<b>지자체 조례</b>를 동시에 검색합니다. "
+        "카드의 <b>🤖 Gemini AI 분석</b> 또는 <b>💬 직접 질문</b>으로 핵심 규제를 즉시 요약합니다."
         "</p>",
         unsafe_allow_html=True,
     )
@@ -466,43 +467,55 @@ with tab1:
     with col_q:
         search_query = st.text_input(
             "검색어",
-            placeholder="예: 태양광, 풍력발전, 해상풍력, ESS, 신재생에너지 …  (조례 이름으로 검색)",
+            placeholder="예: 농지법, 전기사업법, 환경영향평가법, 태양광, 풍력발전, 해상풍력 …",
             label_visibility="collapsed",
         )
     with col_btn:
         search_clicked = st.button("🔍 검색", use_container_width=True)
 
-    # 검색 버튼 클릭 시 API 호출
+    # 검색 버튼 클릭 시 국가법령 + 조례 동시 조회
     if search_clicked and search_query:
         with st.spinner("검색 중…"):
+            nat_result  = {"total": 0, "items": []}
+            ord_result  = {"total": 0, "items": []}
+            search_error = None
             try:
-                result = search_ordinances(search_query)
-                st.session_state["law_search_result"] = result
-                st.session_state["law_search_query"] = search_query
+                nat_result = search_national_laws(search_query)
+            except Exception as e:
+                search_error = str(e)
+            try:
+                ord_result = search_ordinances(search_query)
             except ValueError as e:
                 st.error(f"🔑 {e}")
-                # 현재 서버 IP를 표시하여 law.go.kr에 추가 등록할 수 있도록 안내
                 server_ip = get_server_ip()
                 st.info(
                     f"**현재 서버 IP: `{server_ip}`**\n\n"
                     "국가법령정보 공동활용 사이트 → OPEN API → OPEN API 신청 → "
                     "해당 항목 수정에서 위 IP를 도메인주소란에 추가로 등록해 주세요."
                 )
-                st.session_state.pop("law_search_result", None)
             except Exception as e:
-                st.error(f"❌ 조례 검색 오류: {e}")
-                st.session_state.pop("law_search_result", None)
+                search_error = str(e)
 
-    law_result = st.session_state.get("law_search_result")
+            if search_error:
+                st.error(f"❌ 검색 오류: {search_error}")
+
+            st.session_state["law_nat_result"]  = nat_result
+            st.session_state["law_ord_result"]  = ord_result
+            st.session_state["law_search_query"] = search_query
+
+    nat_result = st.session_state.get("law_nat_result")
+    ord_result = st.session_state.get("law_ord_result")
     law_query  = st.session_state.get("law_search_query", "")
 
     # KPI 행
+    nat_total = nat_result["total"] if nat_result else 0
+    ord_total = ord_result["total"] if ord_result else 0
     kpi_cols = st.columns(4)
     kpis = [
-        ("🏛️", str(law_result["total"]) if law_result else "✅ 연동 완료", "검색된 조례 수"),
-        ("📋", str(len(law_result["items"])) if law_result else "—", "현재 목록"),
+        ("⚖️", str(nat_total) if nat_result else "✅ 연동 완료", "국가법령 검색 수"),
+        ("🏛️", str(ord_total) if ord_result else "✅ 연동 완료", "지자체 조례 검색 수"),
         ("🤖", "준비완료", "Gemini AI 분석"),
-        ("⚠️", "—", "규제 알림"),
+        ("💬", "직접 질문", "커스텀 질문"),
     ]
     for col, (icon, value, label) in zip(kpi_cols, kpis):
         with col:
@@ -517,76 +530,132 @@ with tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── 검색 결과 표시 ─────────────────────────────────────────────────
-    if law_result:
-        items = law_result["items"]
-        st.markdown(
-            f'<p class="section-title">검색 결과: "{law_query}" (전체 {law_result["total"]}건)</p>',
-            unsafe_allow_html=True,
-        )
-        if items:
-            for item in items:
-                name_html = (
-                    f'<a href="{item["link"]}" target="_blank" '
-                    f'style="color:#ccd6f6; text-decoration:none;">{item["name"]}</a>'
-                    if item["link"] else item["name"]
-                )
-                st.markdown(
-                    f"""<div class="card">
-                        <p class="meta">📍 {item['org']} &nbsp;·&nbsp; 공포 {item['date']} &nbsp;·&nbsp; 시행 {item['enforce_date']}</p>
-                        <h4>{name_html}</h4>
-                        <p><span style="color:#64ffda; font-size:0.82rem;">{item['type']}</span></p>
-                    </div>""",
-                    unsafe_allow_html=True,
-                )
+    def _render_law_cards(items: list, section_key_prefix: str, target: str):
+        """법령/조례 카드 렌더링 공통 함수."""
+        for item in items:
+            name_html = (
+                f'<a href="{item["link"]}" target="_blank" '
+                f'style="color:#ccd6f6; text-decoration:none;">{item["name"]}</a>'
+                if item["link"] else item["name"]
+            )
+            org_icon = "⚖️" if target == "law" else "📍"
+            st.markdown(
+                f"""<div class="card">
+                    <p class="meta">{org_icon} {item['org']} &nbsp;·&nbsp; 공포 {item['date']} &nbsp;·&nbsp; 시행 {item['enforce_date']}</p>
+                    <h4>{name_html}</h4>
+                    <p><span style="color:#64ffda; font-size:0.82rem;">{item['type']}</span></p>
+                </div>""",
+                unsafe_allow_html=True,
+            )
 
-                # ── Gemini AI 분석 버튼 (카드별 독립) ─────────────────
-                btn_key    = f"analyze_law_{item['mst'] or item['name']}"
-                result_key = f"law_analysis_{item['mst'] or item['name']}"
+            item_id     = item["mst"] or item["name"]
+            btn_key     = f"{section_key_prefix}_btn_{item_id}"
+            result_key  = f"{section_key_prefix}_result_{item_id}"
+            prompt_key  = f"{section_key_prefix}_prompt_{item_id}"
+            qbtn_key    = f"{section_key_prefix}_qbtn_{item_id}"
 
-                col_btn_ai, col_spacer = st.columns([2, 5])
-                with col_btn_ai:
-                    if st.button("🤖 Gemini AI 분석", key=btn_key, use_container_width=True):
-                        with st.spinner(f"Gemini AI 분석 중 — {item['name']}…"):
+            # ── 버튼 행: 표준 분석 + 커스텀 질문 ──────────────────────
+            col_ai, col_q_label = st.columns([2, 5])
+            with col_ai:
+                if st.button("🤖 Gemini AI 분석", key=btn_key, use_container_width=True):
+                    with st.spinner(f"Gemini AI 분석 중 — {item['name']}…"):
+                        try:
+                            ai_result = analyze_ordinance(
+                                law_name=item["name"],
+                                org=item["org"],
+                                url=item.get("link", ""),
+                                mst=item.get("mst", ""),
+                                target=target,
+                            )
+                            st.session_state[result_key] = ("standard", ai_result)
+                        except ValueError as e:
+                            st.session_state[result_key] = ("standard", f"❌ **API 키 오류**: {e}")
+                        except Exception as e:
+                            st.session_state[result_key] = ("standard", f"❌ **분석 실패**: {e}")
+
+            # ── 커스텀 질문 입력창 ─────────────────────────────────────
+            with st.expander("💬 직접 질문하기", expanded=False):
+                custom_prompt = st.text_area(
+                    "질문을 입력하세요",
+                    key=prompt_key,
+                    placeholder=(
+                        "예) 태양광 이격거리 기준을 알려주세요.\n"
+                        "예) 풍력 소음 규제 조항과 허가 조건을 설명해 주세요.\n"
+                        "예) 이 법령에서 농업진흥구역 관련 규제는 무엇인가요?"
+                    ),
+                    height=100,
+                    label_visibility="collapsed",
+                )
+                if st.button("💬 질문 전송", key=qbtn_key, use_container_width=False):
+                    if not custom_prompt.strip():
+                        st.warning("질문을 입력해 주세요.")
+                    else:
+                        with st.spinner(f"Gemini AI 답변 중 — {item['name']}…"):
                             try:
                                 ai_result = analyze_ordinance(
                                     law_name=item["name"],
                                     org=item["org"],
                                     url=item.get("link", ""),
+                                    mst=item.get("mst", ""),
+                                    target=target,
+                                    custom_question=custom_prompt.strip(),
                                 )
-                                st.session_state[result_key] = ai_result
+                                st.session_state[result_key] = ("custom", ai_result)
                             except ValueError as e:
-                                st.session_state[result_key] = f"❌ **API 키 오류**: {e}"
+                                st.session_state[result_key] = ("custom", f"❌ **API 키 오류**: {e}")
                             except Exception as e:
-                                st.session_state[result_key] = f"❌ **분석 실패**: {e}"
+                                st.session_state[result_key] = ("custom", f"❌ **분석 실패**: {e}")
 
-                if result_key in st.session_state:
-                    with st.expander("📋 Gemini AI 분석 결과 보기", expanded=True):
-                        st.markdown(st.session_state[result_key])
+            # ── 분석 결과 표시 ────────────────────────────────────────
+            if result_key in st.session_state:
+                mode, content = st.session_state[result_key]
+                title = "📋 Gemini AI 분석 결과" if mode == "standard" else "💬 질문 답변"
+                with st.expander(title, expanded=True):
+                    st.markdown(content)
 
-        else:
-            st.info(
-                f"'{law_query}'에 대한 검색 결과가 없습니다. "
-                "이 API는 조례 이름으로만 검색됩니다 — '태양광', '풍력발전', '해상풍력' 등으로 시도해보세요."
+    # ── 검색 결과 표시 ─────────────────────────────────────────────────
+    if nat_result or ord_result:
+        # 국가법령 섹션
+        if nat_result and nat_result["items"]:
+            st.markdown(
+                f'<p class="section-title">⚖️ 국가법령 검색 결과: "{law_query}" ({nat_result["total"]}건)</p>',
+                unsafe_allow_html=True,
             )
+            _render_law_cards(nat_result["items"], "nat", "law")
+        elif nat_result:
+            st.info(f'⚖️ 국가법령: "{law_query}"에 해당하는 법령이 없습니다.')
+
+        st.markdown("---")
+
+        # 지자체 조례 섹션
+        if ord_result and ord_result["items"]:
+            st.markdown(
+                f'<p class="section-title">🏛️ 지자체 조례 검색 결과: "{law_query}" ({ord_result["total"]}건)</p>',
+                unsafe_allow_html=True,
+            )
+            _render_law_cards(ord_result["items"], "ord", "ordin")
+        elif ord_result:
+            st.info(f'🏛️ 지자체 조례: "{law_query}"에 해당하는 조례가 없습니다.')
 
     else:
         # 초기 상태: 검색 방법 안내
         st.markdown(
             """<div class="coming-card">
-                <h4>🔍 조례 이름 키워드로 검색하세요</h4>
+                <h4>🔍 법령명 또는 키워드로 검색하세요</h4>
                 <p style="color:#ffc837; font-size:0.85rem; margin-bottom:0.6rem;">
-                    ⚠️ 이 API는 <b>조례 이름(법규명)</b>으로만 검색됩니다.
+                    ⚠️ 이 API는 <b>법령명(이름)</b>으로만 검색됩니다.
                     "이격거리", "소음" 같은 내용어는 검색 불가합니다.
                 </p>
                 <ul>
-                    <li><b>태양광</b> — 전국 태양광 관련 지자체 조례 (약 18건+)</li>
+                    <li><b>농지법</b> — 농업진흥구역·농지전용 규제 (국가법령)</li>
+                    <li><b>환경영향평가법</b> — 환경영향평가 대상 기준 (국가법령)</li>
+                    <li><b>전기사업법</b> — 발전사업 허가·계통연계 (국가법령)</li>
+                    <li><b>신에너지 및 재생에너지</b> — 신재생에너지법 (국가법령)</li>
+                    <li><b>태양광</b> — 전국 태양광 관련 지자체 조례</li>
                     <li><b>풍력발전</b> — 풍력발전 설치·관리 조례</li>
                     <li><b>해상풍력</b> — 해상풍력 관련 조례</li>
-                    <li><b>신재생에너지</b> — 신재생에너지 관련 조례</li>
-                    <li><b>에너지저장장치</b> — ESS 설치 안전 관련 조례</li>
                 </ul>
-                <p style="margin-top:0.6rem;">🤖 조례 검색 후 각 카드의 <b>Gemini AI 분석</b> 버튼을 클릭하면 즉시 분석 결과를 볼 수 있습니다</p>
+                <p style="margin-top:0.6rem;">🤖 검색 후 카드의 <b>Gemini AI 분석</b> 또는 <b>💬 직접 질문하기</b>를 사용하세요</p>
             </div>""",
             unsafe_allow_html=True,
         )
