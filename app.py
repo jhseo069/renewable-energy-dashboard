@@ -476,16 +476,19 @@ with st.sidebar:
     st.markdown("**📊 일일 모니터링 전체 다운로드**")
     st.markdown(
         "<p style='color:#8892b0; font-size:0.78rem;'>"
-        "탭2(뉴스)·탭3(보도자료+법안)·탭4(공지사항)를 하나의 CSV로 통합합니다.</p>",
+        "탭2·탭3·탭4 선택 기간의 데이터를 하나의 CSV로 통합합니다.</p>",
         unsafe_allow_html=True,
     )
 
-    # 오늘 KST 00:00 기준 컷오프 — 오늘 수집된 데이터만 포함
-    _rpt_today    = get_kst_now().date()
-    _rpt_cutoff   = datetime.combine(_rpt_today, dtime(0, 0))
-    _rpt_930_str  = datetime.combine(_rpt_today, dtime(9, 30)).strftime("%Y-%m-%dT%H:%M:%S")
+    # 기간 필터 — 탭3 선택값 반영, 기본 "최근 3일"
+    _rpt_period  = st.session_state.get("policy_period", "최근 3일")
+    _rpt_cutoff  = get_kst_now() - _PERIOD_DELTA.get(_rpt_period, timedelta(hours=72))
+    _rpt_today   = get_kst_now().date()
+    _rpt_930_str = datetime.combine(_rpt_today, dtime(9, 30)).strftime("%Y-%m-%dT%H:%M:%S")
 
-    # 뉴스 (Tab 2) — 캐시 활용
+    # 뉴스 (Tab 2) — 탭2 기간 선택값 반영
+    _rpt_news_period = st.session_state.get("period_filter", "최근 3일")
+    _rpt_news_cutoff = get_kst_now() - _PERIOD_DELTA.get(_rpt_news_period, timedelta(hours=72))
     try:
         _rpt_news_raw = _fetch_all_keyword_news(_KEYWORDS)
     except Exception:
@@ -493,7 +496,7 @@ with st.sidebar:
     _rpt_rows = []
     for _kw in _KEYWORDS:
         for _n in _rpt_news_raw.get(_kw, []):
-            if _safe_parse_dt(_n.get("date", "")) >= _rpt_cutoff:
+            if _safe_parse_dt(_n.get("date", "")) >= _rpt_news_cutoff:
                 _rpt_rows.append({
                     "구분": "뉴스", "날짜": _n.get("date", ""),
                     "출처": _n.get("source", ""), "키워드": _kw,
@@ -501,7 +504,7 @@ with st.sidebar:
                     "링크": _n.get("link", ""),
                 })
 
-    # 보도자료 (Tab 3 RSS) — 캐시 활용
+    # 보도자료 (Tab 3 RSS) — 탭3 기간 필터 동일 적용
     for _a in _fetch_policy_rss():
         if not _a.get("is_dummy") and _safe_parse_dt(_a.get("date", "")) >= _rpt_cutoff:
             _rpt_rows.append({
@@ -511,7 +514,7 @@ with st.sidebar:
                 "링크": _a.get("link", ""),
             })
 
-    # 국회 법안 (Tab 3) — 캐시 활용
+    # 국회 법안 (Tab 3) — 탭3 기간 필터 동일 적용
     for _b in _fetch_assembly_bills():
         if not _b.get("is_mock") and _safe_parse_dt(_b.get("propose_date", "")) >= _rpt_cutoff:
             _rpt_rows.append({
