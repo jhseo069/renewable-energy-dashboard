@@ -1307,9 +1307,9 @@ with tab4:
                 options=list(_T4_ORG_DISPLAY.values()),
                 key="form_org",
             )
-            f_category = st.text_input(
+            f_category = st.selectbox(
                 "카테고리",
-                placeholder="예: 공지사항, 입찰공고, 전력시장공고, REC발급공지 …",
+                options=["공지", "고시", "보도", "참고"],
                 key="form_category",
             )
             f_date = st.date_input("날짜", key="form_date")
@@ -1335,7 +1335,7 @@ with tab4:
                 f_org_key = next((k for k, v in _T4_ORG_DISPLAY.items() if v == f_org), "etc")
                 new_entry = {
                     "org_key":  f_org_key,
-                    "category": f_category.strip() or "공지사항",
+                    "category": f_category,
                     "title":    f_title.strip(),
                     "date":     f_date.strftime("%Y-%m-%d"),
                     "link":     f_link.strip(),
