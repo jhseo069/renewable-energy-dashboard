@@ -417,7 +417,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         "<p style='color:#8892b0; font-size:0.8rem;'>"
-        "신재생에너지 사업개발팀<br>사내 대시보드 v0.4.0</p>",
+        "신재생에너지 사업개발팀<br>사내 대시보드 v0.6.1</p>",
         unsafe_allow_html=True,
     )
 
