@@ -158,114 +158,111 @@ def _make_mock_bills() -> list[dict]:
     ]
 
 
-def fetch_assembly_bills(keyword: str = "해상풍력") -> list[dict]:
+def _fetch_raw_page(page_index: int) -> list[dict]:
     """
-    국회 오픈 API로 키워드 관련 법안을 검색합니다.
+    국회 API 단일 페이지 원시 행(row) 목록 반환.
+
+    주의: SEARCH_WORD 파라미터는 법안명 검색을 하지 않음 (실측 확인).
+    해당 파라미터 사용 시 '신재생에너지' 검색어에도 16,878건 전체가 반환되며
+    1페이지 결과가 건강보험법·약사법 등 무관 법안으로 채워짐 → 사용 안 함.
+    """
+    response = requests.get(
+        f"{ASSEMBLY_API_BASE}/TVBPMBILL11",
+        params={
+            "KEY":    ASSEMBLY_API_KEY,
+            "Type":   "json",
+            "pIndex": page_index,
+            "pSize":  100,
+            "AGE":    22,   # 제22대 국회 (2024.05.30~) 고정
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    # API 레벨 에러 감지 (인증 오류, 파라미터 오류 등)
+    # 정상 응답: {"TVBPMBILL11": [...]} / 에러: {"RESULT": {...}}
+    if "RESULT" in data and "TVBPMBILL11" not in data:
+        result = data["RESULT"]
+        code = result.get("CODE", "")
+        msg  = result.get("MESSAGE", "")
+        print(f"[국회 API] 에러 응답 (코드: {code}): {msg}")
+        return []
+
+    api_section = data.get("TVBPMBILL11", [])
+    rows = api_section[1].get("row", []) if len(api_section) > 1 else []
+    return rows
+
+
+def fetch_all_bills() -> list[dict]:
+    """
+    국회 오픈 API에서 최신 법안을 페이지별로 수집하고 제목 키워드로 필터링.
+
     API 키가 없거나 오류 발생 시 Mock 데이터를 자동 반환합니다.
 
-    Args:
-        keyword: 검색 키워드 (기본값: '해상풍력')
+    설계 변경 (2026-03-09):
+    - SEARCH_WORD 제거: 실측 결과 법안명 검색을 하지 않아 무관 법안 16,878건 반환
+    - 키워드 루프 → 페이지 루프: 최신 N페이지 수집 후 클라이언트 사이드 제목 필터
+    - 위원회 필터 제거: 발의 초기 법안은 CURR_COMMITTEE=None — 위원회 배정 전에도 수집
+    - DETAIL_LINK → LINK_URL: 실제 API 필드명으로 수정 (DETAIL_LINK는 항상 빈값)
 
     Returns:
         [{bill_id, title, proposer, committee, status,
           propose_date, link, is_mock}, ...]
     """
-    # API 키가 없으면 즉시 Mock 반환 — 키 없이 API 호출하면 오류만 나므로 조기 차단
     if not ASSEMBLY_API_KEY:
-        print(f"[국회 API] ASSEMBLY_API_KEY 미설정 → Mock 데이터 반환 (키워드: {keyword})")
+        print("[국회 API] ASSEMBLY_API_KEY 미설정 → Mock 데이터 반환")
         return _make_mock_bills()
 
     try:
-        # 국회 오픈 API: 법률안 목록 조회 (TVBPMBILL11)
-        # AGE=22: 제22대 국회 (2024.05.30~) 법안만 조회
-        # pIndex: 페이지 번호 (1부터 시작), pSize: 페이지당 결과 수 (최대 100)
-        response = requests.get(
-            f"{ASSEMBLY_API_BASE}/TVBPMBILL11",
-            params={
-                "KEY":         ASSEMBLY_API_KEY,
-                "Type":        "json",
-                "pIndex":      1,
-                "pSize":       100,
-                "AGE":         22,          # 제22대 국회 고정
-                "SEARCH_WORD": keyword,
-            },
-            timeout=15,
-        )
-        response.raise_for_status()
-        data = response.json()
+        # 최신 1000건 스캔 (API 최신순 정렬 기준 → 약 최근 6~8주치)
+        # Cloud 타임아웃 고려: 10페이지 × 15s 타임아웃 = 최대 150s → cache_data로 1회만 호출
+        MAX_PAGES = 10
+        seen_bill_ids: set[str] = set()
+        all_bills: list[dict] = []
 
-        # API 최상위 RESULT 키 감지 — 인증 오류, 파라미터 오류 등 API 레벨 에러
-        # 정상 응답은 {"TVBPMBILL11": [...]} 구조이며, 에러는 {"RESULT": {...}} 구조
-        if "RESULT" in data and "TVBPMBILL11" not in data:
-            result = data["RESULT"]
-            code = result.get("CODE", "")
-            msg  = result.get("MESSAGE", "")
-            print(f"[국회 API] 에러 응답 (코드: {code}): {msg} → Mock 데이터 반환")
+        for page in range(1, MAX_PAGES + 1):
+            rows = _fetch_raw_page(page)
+            if not rows:
+                break
+
+            for row in rows:
+                title = row.get("BILL_NAME", "") or ""
+                # 제목 키워드 필터 — TITLE_KEYWORDS 중 하나라도 포함해야 수집
+                if not any(kw in title for kw in TITLE_KEYWORDS):
+                    continue
+
+                bill_id = row.get("BILL_ID", "")
+                if bill_id in seen_bill_ids:
+                    continue
+                seen_bill_ids.add(bill_id)
+
+                raw_status = row.get("PROC_RESULT_CD", "")
+                all_bills.append({
+                    "bill_id":      bill_id,
+                    "title":        title,
+                    "proposer":     row.get("PROPOSER", ""),
+                    # 발의 초기엔 None → "" 처리
+                    "committee":    row.get("CURR_COMMITTEE") or "",
+                    "status":       BILL_STATUS_MAP.get(raw_status, raw_status or "심사중"),
+                    "propose_date": row.get("PROPOSE_DT", ""),
+                    # DETAIL_LINK는 실제 API 필드가 아님 — LINK_URL이 정확한 키
+                    "link":         row.get("LINK_URL", ""),
+                    "is_mock":      False,
+                })
+
+        if not all_bills:
+            print(f"[국회 API] {MAX_PAGES}페이지 스캔 결과 필터 통과 법안 0건 → Mock 반환")
             return _make_mock_bills()
 
-        # 국회 API 응답 구조: {"TVBPMBILL11": [{"head": [...]}, {"row": [...]}]}
-        # 두 번째 요소의 "row" 키가 실제 법안 목록
-        api_section = data.get("TVBPMBILL11", [])
-        rows = api_section[1].get("row", []) if len(api_section) > 1 else []
-
-        bills: list[dict] = []
-        for row in rows:
-            # API가 CURR_COMMITTEE를 JSON null로 반환하면 Python None이 됨
-            # → or "" 로 None을 빈 문자열로 교체하여 TypeError 방지
-            committee = row.get("CURR_COMMITTEE") or ""
-
-            # 소관위원회 필터 — ALLOWED_COMMITTEES 목록의 키워드를 하나라도 포함해야 통과
-            # 위원회 미배정(빈 문자열) 법안은 자동 제외
-            if not any(kw in committee for kw in ALLOWED_COMMITTEES):
-                continue
-
-            # 법안 제목 키워드 필터 — 위원회 필터만으로는 경제자유구역·조선·중소기업 등
-            # 무관 법안까지 수집되므로, 제목에 TITLE_KEYWORDS가 하나라도 있어야 통과
-            title = row.get("BILL_NAME", "") or ""
-            if not any(kw in title for kw in TITLE_KEYWORDS):
-                continue
-
-            raw_status = row.get("PROC_RESULT_CD", "")
-            bills.append({
-                "bill_id":      row.get("BILL_ID", ""),
-                "title":        row.get("BILL_NAME", ""),
-                "proposer":     row.get("PROPOSER", ""),
-                "committee":    committee,
-                # 상태 코드를 읽기 쉬운 한국어로 변환
-                "status":       BILL_STATUS_MAP.get(raw_status, raw_status or "심사중"),
-                "propose_date": row.get("PROPOSE_DT", ""),
-                "link":         row.get("DETAIL_LINK", ""),
-                "is_mock":      False,
-            })
-
-        return bills
+        # 발의일 기준 최신순 정렬
+        all_bills.sort(key=lambda x: x.get("propose_date", ""), reverse=True)
+        print(f"[국회 API] 수집 완료: {len(all_bills)}건 (최신 {MAX_PAGES * 100}건 스캔)")
+        return all_bills
 
     except Exception as e:
-        # 네트워크 오류, API 스펙 변경 등 예외 상황 → Mock으로 graceful 처리
         print(f"[국회 API] 수집 실패: {e} → Mock 데이터 반환")
         return _make_mock_bills()
-
-
-def fetch_all_bills() -> list[dict]:
-    """
-    BILL_KEYWORDS에 등록된 모든 키워드로 법안을 수집하고 중복 제거 후 반환.
-    키워드가 여러 개이므로 같은 법안이 중복 수집될 수 있어 bill_id로 중복 제거.
-    """
-    seen_bill_ids: set[str] = set()
-    all_bills: list[dict] = []
-
-    for keyword in BILL_KEYWORDS:
-        bills = fetch_assembly_bills(keyword=keyword)
-        for bill in bills:
-            bill_id = bill["bill_id"]
-            # Mock 데이터는 bill_id가 고정이므로 첫 번째만 포함
-            if bill_id not in seen_bill_ids:
-                seen_bill_ids.add(bill_id)
-                all_bills.append(bill)
-
-    # 발의일 기준 최신순 정렬
-    all_bills.sort(key=lambda x: x.get("propose_date", ""), reverse=True)
-    return all_bills
 
 
 # ── 단독 실행 시 테스트 ────────────────────────────────────────────────
