@@ -453,7 +453,7 @@ def _save_smp_rec(records: list[dict]) -> None:
 
 
 # ─────────────────────────────────────────────
-# 주간 뉴스레터 생성 헬퍼
+# 일일 뉴스레터 생성 헬퍼
 # ─────────────────────────────────────────────
 _NL_CATEGORIES = {
     "해상풍력":      ["해상풍력", "해상풍력설치선", "WTIV", "하부설치선"],
@@ -474,7 +474,7 @@ def _generate_newsletter_html(
     issue_content: str,
     events: list,
 ) -> str:
-    """주간 뉴스레터 HTML 생성 — 브라우저에서 열어 인쇄/PDF 저장 가능"""
+    """일일 뉴스레터 HTML 생성 — 브라우저에서 열어 인쇄/PDF 저장 가능"""
 
     # SMP/REC 가격 비교 (최신 2개 항목)
     curr = smp_records[0] if len(smp_records) >= 1 else {"date": "—", "SMP": 0.0, "REC": 0.0}
@@ -575,7 +575,7 @@ def _generate_newsletter_html(
   <div class="hdr">
     <div class="hdr-top">
       <div class="logo">KCH</div>
-      <div class="iss">Weekly Renewable Energy Issue<br>{issue_date_str} Vol. {vol}</div>
+      <div class="iss">Daily Renewable Energy Issue<br>{issue_date_str} Vol. {vol}</div>
     </div>
     <div class="ttl">Renewable Energy Monday</div>
   </div>
@@ -713,9 +713,9 @@ with st.sidebar:
                    f"법안 {sum(1 for r in _rpt_rows if r['구분']=='국회법안')}·"
                    f"공지 {sum(1 for r in _rpt_rows if r['구분']=='공지사항')}건)")
 
-    # ── 주간 뉴스레터 생성 ─────────────────────────────────────────────
+    # ── 일일 뉴스레터 생성 ─────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("**📰 주간 뉴스레터 생성**")
+    st.markdown("**📰 일일 뉴스레터 생성**")
     with st.expander("⚙️ 뉴스레터 설정 및 생성", expanded=False):
         nl_c1, nl_c2 = st.columns(2)
         with nl_c1:
@@ -754,8 +754,8 @@ with st.sidebar:
         )
 
         if st.button("📄 HTML 뉴스레터 생성", key="nl_gen_btn", use_container_width=True):
-            # 7일치 뉴스 수집 (캐시 활용)
-            _nl_cutoff = get_kst_now() - timedelta(days=7)
+            # 어제+오늘 2일치 뉴스 수집 (일일 리포트와 동일 기간)
+            _nl_cutoff = datetime.combine(get_kst_now().date() - timedelta(days=1), dtime(0, 0))
             try:
                 _nl_raw = _fetch_all_keyword_news(_KEYWORDS)
             except Exception:
