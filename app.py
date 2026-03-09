@@ -21,6 +21,7 @@ from utils.law_api import search_ordinances, get_server_ip
 sys.path.insert(0, str(Path(__file__).parent / "execution"))
 from rss_crawler import fetch_rss_articles
 from law_api import fetch_all_bills
+from notice_crawler import fetch_all_notices
 
 load_dotenv()
 
@@ -107,6 +108,12 @@ def _fetch_attachments_cached(link: str) -> list[dict]:
 def _fetch_assembly_bills() -> list[dict]:
     """국회 법안 수집 (6시간 캐시). API 키 없으면 Mock 반환."""
     return fetch_all_bills()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_agency_notices() -> list[dict]:
+    """유관기관 공지사항 수집 (1시간 캐시). 크롤링 실패 시 Mock 반환."""
+    return fetch_all_notices()
 
 
 # ─────────────────────────────────────────────
@@ -308,7 +315,7 @@ with st.sidebar:
         ("badge-ready",   "● 네이버 뉴스 API"),
         ("badge-ready",   "● 국회 열린국회 API"),
         ("badge-ready",   "● 중앙부처 RSS"),
-        ("badge-plan",    "● 한전/KPX 크롤러"),
+        ("badge-ready",   "● 한전/KPX/에너지공단 크롤러"),
     ]
     for cls, label in api_status:
         st.markdown(f'<span class="badge {cls}">{label}</span>', unsafe_allow_html=True)
@@ -948,56 +955,168 @@ with tab4:
     st.markdown("### 📡 유관기관 공지사항")
     st.markdown(
         "<p style='color:#8892b0;'>"
-        "한전·KPX·에너지공단·전기위원회·지자체의 최신 공지를 한곳에서 모니터링합니다."
+        "KPX(전력거래소)·한국에너지공단·한전의 최신 공지를 자동 수집합니다. "
+        "크롤링 차단 시 Mock 데이터가 표시되며 원본 링크는 기관 사이트로 연결됩니다."
         "</p>",
         unsafe_allow_html=True,
     )
 
-    # 기관 필터
-    institutions = ["전체", "한전 (KEPCO)", "KPX (전력거래소)", "한국에너지공단", "전기위원회", "신안군청"]
-    st.selectbox("기관 선택", institutions)
+    # 상단 컨트롤 — 갱신 버튼 + 기관 필터
+    col_n_refresh, col_n_filter = st.columns([1, 3])
+    with col_n_refresh:
+        if st.button("🔄 갱신", key="notice_refresh", use_container_width=True,
+                     help="공지사항 캐시를 초기화하고 최신 데이터를 다시 수집합니다."):
+            st.cache_data.clear()
+            st.rerun()
+    with col_n_filter:
+        # org_key 값과 표시 레이블 매핑
+        _ORG_OPTIONS = {
+            "전체":            None,
+            "KPX (전력거래소)": "kpx",
+            "한국에너지공단":   "kemco",
+            "한전 (KEPCO)":    "kepco",
+        }
+        selected_org_label = st.selectbox(
+            "기관 선택",
+            options=list(_ORG_OPTIONS.keys()),
+            label_visibility="collapsed",
+            key="notice_org_filter",
+        )
+        selected_org_key = _ORG_OPTIONS[selected_org_label]
+
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 예정 기능 안내
+    # ── 공지사항 수집 ───────────────────────────────────────────────────
+    with st.spinner("🔄 유관기관 공지사항 수집 중… (1시간 캐시)"):
+        all_notices = _fetch_agency_notices()
+
+    # 기관 필터 적용
+    if selected_org_key:
+        filtered_notices = [n for n in all_notices if n["org_key"] == selected_org_key]
+    else:
+        filtered_notices = all_notices
+
+    # Mock 여부 집계 (KPI용)
+    mock_count = sum(1 for n in filtered_notices if n["is_mock"])
+    real_count = len(filtered_notices) - mock_count
+
+    # KPI 행
+    kpi_cols = st.columns(4)
+    kpi_data_n = [
+        ("📋", str(len(filtered_notices)), "수집된 공지"),
+        ("✅", str(real_count),            "실데이터"),
+        ("⚙️", str(mock_count),            "Mock(크롤링 대기)"),
+        ("🏢", "3개",                      "연동 기관"),
+    ]
+    for col, (icon, value, label) in zip(kpi_cols, kpi_data_n):
+        with col:
+            st.markdown(
+                f"""<div class="kpi-card">
+                    <div style="font-size:1.4rem;">{icon}</div>
+                    <div class="value" style="font-size:1.3rem;">{value}</div>
+                    <div class="label">{label}</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Mock 모드 안내 — 전체 Mock일 때만 표시
+    if mock_count == len(filtered_notices) and filtered_notices:
+        st.markdown(
+            "<div class='coming-card' style='margin-bottom:1rem;'>"
+            "<h4>⚙️ 크롤링 연결 중 — Mock 데이터 표시 중</h4>"
+            "<p>공공기관 웹서버 보안(IP 차단·JS 렌더링) 으로 인해 현재 샘플 데이터가 표시됩니다.<br>"
+            "각 공지 카드의 <b>원문 링크</b>를 클릭하면 해당 기관 공식 페이지로 이동합니다.<br>"
+            "캐시 유효 1시간 · 🔄 갱신 버튼으로 즉시 재시도</p>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── 기관별 Expander ─────────────────────────────────────────────────
+    # org_key 기준으로 그룹핑 — 선택된 기관만 또는 전체
+    _ORG_ICON = {"kpx": "📊", "kemco": "🌿", "kepco": "⚡"}
+    _ORG_DISPLAY = {
+        "kpx":   "KPX (전력거래소)",
+        "kemco": "한국에너지공단",
+        "kepco": "한전 (KEPCO)",
+    }
+
+    # 기관 그룹 구성 (선택 기관 우선)
+    org_keys_to_show = [selected_org_key] if selected_org_key else list(_ORG_DISPLAY.keys())
+
+    for org_key in org_keys_to_show:
+        org_notices = [n for n in filtered_notices if n["org_key"] == org_key]
+        if not org_notices:
+            continue
+
+        icon = _ORG_ICON.get(org_key, "🏢")
+        org_name = _ORG_DISPLAY.get(org_key, org_key)
+        has_mock  = any(n["is_mock"] for n in org_notices)
+        mock_badge = " <span style='color:#ffc837; font-size:0.75rem;'>⚙️ [연결 준비 중]</span>" if has_mock else ""
+
+        # CSV 다운로드용 데이터
+        with st.expander(f"{icon} {org_name}  ({len(org_notices)}건)", expanded=True):
+            # 다운로드 버튼
+            import pandas as pd
+            dl_df_n = pd.DataFrame([{
+                "기관명": n["org"],
+                "카테고리": n["category"],
+                "제목": n["title"],
+                "날짜": n["date"],
+                "링크": n["link"],
+                "Mock여부": "O" if n["is_mock"] else "X",
+            } for n in org_notices])
+            today_str = datetime.today().strftime("%Y-%m-%d")
+            st.download_button(
+                label=f"📥 {org_name} 공지 CSV 다운로드",
+                data=to_csv_bytes(dl_df_n),
+                file_name=f"{today_str}_{org_key}_공지사항.csv",
+                mime="text/csv",
+                key=f"dl_{org_key}",
+            )
+
+            with st.container(height=400):
+                for notice in org_notices:
+                    is_mock = notice["is_mock"]
+                    card_class = "coming-card" if is_mock else "card"
+                    title_color = "#ffc837" if is_mock else "#ccd6f6"
+                    mock_label  = " <span style='font-size:0.72rem; color:#ffc837;'>⚙️ Mock</span>" if is_mock else ""
+
+                    st.markdown(
+                        f"""<div class="{card_class}" style="margin-bottom:0.5rem;">
+                            <p class="meta">
+                                {_ORG_ICON.get(notice['org_key'], '🏢')} {notice['org']}
+                                &nbsp;·&nbsp; {notice['category']}
+                                &nbsp;·&nbsp; {notice['date']}
+                                {mock_label}
+                            </p>
+                            <h4 style="font-size:0.92rem; color:{title_color};">
+                                <a href="{notice['link']}" target="_blank"
+                                   style="color:{title_color}; text-decoration:none;">
+                                    {notice['title']}
+                                </a>
+                            </h4>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+    if not filtered_notices:
+        st.info("수집된 공지사항이 없습니다.")
+
+    # ── Phase 2 예정 기관 안내 ──────────────────────────────────────────
+    st.markdown("---")
     st.markdown(
         """<div class="coming-card">
-            <h4>🚀 연동 예정 기관 및 방법</h4>
+            <h4>🚀 Phase 2 연동 예정 기관</h4>
             <ul>
-                <li><b>한전 (KEPCO)</b> — 계통 연계 공지, 약관 개정 크롤링</li>
-                <li><b>KPX (전력거래소)</b> — 시장 운영 공지, SMP 동향 크롤링</li>
-                <li><b>한국에너지공단</b> — RPS/REC 공지, 보조금 공고 크롤링</li>
-                <li><b>전기위원회</b> — 허가 심의 결과, 규칙 개정 크롤링</li>
-                <li><b>신안군청</b> — 인허가 공고, 군 고시 크롤링</li>
+                <li><b>전기위원회</b> — 발전사업 허가 심의 결과, 규칙 개정 공고</li>
+                <li><b>신안군청</b> — 태양광·풍력 인허가 공고, 군 고시</li>
+                <li><b>산업부 전기위원회</b> — 계통 운영 규정 개정</li>
             </ul>
-            <p style="margin-top:0.6rem;">⚙️ 사용 기술: BeautifulSoup (정적), Selenium (JS 렌더링 필요 시)</p>
+            <p style="margin-top:0.5rem; font-size:0.82rem; color:#64ffda;">
+                ⚙️ JS 렌더링 필요 기관은 Playwright 비동기 크롤러로 별도 검토 예정
+            </p>
         </div>""",
         unsafe_allow_html=True,
     )
-
-    # 공지 카드 Mock — 3열
-    st.markdown('<p class="section-title">최신 공지 (샘플 레이아웃)</p>', unsafe_allow_html=True)
-    col1, col2, col3 = st.columns(3)
-
-    notices_col1 = [
-        ("⚡ 한전", "계통 연계 신청 접수 일정 공지 (3월)", "2026-03-01"),
-        ("⚡ 한전", "전기공급약관 제19차 개정 시행 안내", "2026-02-20"),
-    ]
-    notices_col2 = [
-        ("📊 KPX", "2026년 3월 SMP 산정 결과 공표", "2026-03-02"),
-        ("📊 KPX", "재생에너지 입찰시장 운영 세칙 개정 공고", "2026-02-15"),
-    ]
-    notices_col3 = [
-        ("🌿 에너지공단", "RPS 공급인증서(REC) 발급 기준 개정 안내", "2026-02-28"),
-        ("🏛️ 신안군청", "태양광발전소 인허가 민원 처리 절차 안내", "2026-02-22"),
-    ]
-
-    for col, notices in zip([col1, col2, col3], [notices_col1, notices_col2, notices_col3]):
-        with col:
-            for org, title, date in notices:
-                st.markdown(
-                    f"""<div class="card">
-                        <p class="meta">{org} · {date}</p>
-                        <h4 style="font-size:0.92rem;">{title}</h4>
-                    </div>""",
-                    unsafe_allow_html=True,
-                )
