@@ -983,6 +983,40 @@ with tab3:
             unsafe_allow_html=True,
         )
 
+    # ── 데이터 사전 수집 (통합 CSV용) ─────────────────────────────────
+    with st.spinner("데이터 수집 중…"):
+        raw_rss_articles = _fetch_policy_rss()
+        rss_articles     = _filter_by_period(raw_rss_articles, policy_period)
+        bills            = _fetch_assembly_bills()
+
+    # ── 통합 CSV 다운로드 버튼 (Tab 2와 동일한 방식 — 상단 1개) ──────
+    today_str = datetime.today().strftime("%Y-%m-%d")
+    rss_rows = [{
+        "구분": "보도자료",
+        "날짜": a.get("date", ""),
+        "출처": a.get("source", ""),
+        "제목": a.get("title", ""),
+        "요약": a.get("summary", ""),
+        "링크": a.get("link", ""),
+    } for a in rss_articles if not a.get("is_dummy")]
+    bill_rows = [{
+        "구분": "국회법안",
+        "날짜": b.get("propose_date", ""),
+        "출처": b.get("committee", ""),
+        "제목": b.get("title", ""),
+        "요약": f"{b.get('proposer','')} | {b.get('status','')}",
+        "링크": b.get("link", ""),
+    } for b in bills if not b.get("is_mock")]
+    combined_df = pd.DataFrame(rss_rows + bill_rows)
+    if not combined_df.empty:
+        st.download_button(
+            label="📥 정책·입법 전체 엑셀(CSV) 다운로드 (보도자료 + 국회법안)",
+            data=to_csv_bytes(combined_df),
+            file_name=f"{today_str}_정책입법동향.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── 두 섹션 나란히 배치 ────────────────────────────────────────────
@@ -992,30 +1026,7 @@ with tab3:
     with col_rss:
         st.markdown('<p class="section-title">📢 유관 부처 보도자료 (RSS)</p>', unsafe_allow_html=True)
 
-        with st.spinner("보도자료 수집 중…"):
-            raw_rss_articles = _fetch_policy_rss()
-            # 기간 필터 적용
-            rss_articles = _filter_by_period(raw_rss_articles, policy_period)
-
         if rss_articles:
-            # 보도자료 다운로드 버튼 추가
-            dl_df = pd.DataFrame(rss_articles)
-            if not dl_df.empty:
-                def _get_att_str(link):
-                    atts = _fetch_attachments_cached(link)
-                    return " | ".join([f"{a['name']} ({a['url']})" for a in atts]) if atts else ""
-                
-                dl_df["첨부파일"] = dl_df["link"].apply(_get_att_str)
-                dl_df.rename(columns={"date": "날짜", "source": "부처", "title": "제목", "summary": "요약", "link": "링크"}, inplace=True)
-                dl_df = dl_df[["날짜", "부처", "제목", "요약", "링크", "첨부파일"]]
-                today_str = datetime.today().strftime("%Y-%m-%d")
-                st.download_button(
-                    label="📥 현재 보도자료 엑셀(CSV) 다운로드",
-                    data=to_csv_bytes(dl_df),
-                    file_name=f"{today_str}_보도자료.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
             
             # 부처별로 그룹핑해서 Expander로 표시
             dept_groups: dict[str, list] = {}
@@ -1111,9 +1122,7 @@ with tab3:
     # ── 오른쪽: 국회 법안 ─────────────────────────────────────────────
     with col_law:
         st.markdown('<p class="section-title">🏛️ 국회 법안 동향 (신재생)</p>', unsafe_allow_html=True)
-
-        with st.spinner("법안 수집 중…"):
-            bills = _fetch_assembly_bills()
+        # bills는 상단에서 이미 수집됨
 
         if bills:
             is_mock_mode = any(b["is_mock"] for b in bills)
@@ -1166,74 +1175,116 @@ with tab3:
 
 
 # =============================================
-# TAB 4 : 유관기관 공지사항
+# TAB 4 : 유관기관 공지사항 (수동 입력 방식)
 # =============================================
+
+# ── 공지사항 JSON 저장/로드 헬퍼 ───────────────────────────────────────
+import json as _json
+
+_NOTICES_FILE = Path(__file__).parent / "data" / "notices.json"
+_NOTICES_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+_T4_ORG_ICON = {
+    "kpx":     "📊",
+    "kemco":   "🌿",
+    "kepco":   "⚡",
+    "eleccom": "⚖️",
+    "shinan":  "🌊",
+    "jeonnam": "🏛️",
+}
+_T4_ORG_DISPLAY = {
+    "kpx":     "KPX (전력거래소)",
+    "kemco":   "한국에너지공단",
+    "kepco":   "한전 (KEPCO)",
+    "eleccom": "전기위원회",
+    "shinan":  "신안군청",
+    "jeonnam": "전남도청",
+}
+_T4_ORG_URL = {
+    "kpx":     "https://www.kpx.or.kr",
+    "kemco":   "https://www.kemco.or.kr",
+    "kepco":   "https://home.kepco.co.kr",
+    "eleccom": "https://www.korec.go.kr",
+    "shinan":  "https://www.shinan.go.kr",
+    "jeonnam": "https://www.jeonnam.go.kr",
+}
+
+def _load_notices() -> list[dict]:
+    """data/notices.json 에서 공지사항 목록을 로드합니다."""
+    if _NOTICES_FILE.exists():
+        try:
+            return _json.loads(_NOTICES_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
+
+def _save_notices(notices: list[dict]) -> None:
+    """공지사항 목록을 data/notices.json 에 저장합니다."""
+    _NOTICES_FILE.write_text(_json.dumps(notices, ensure_ascii=False, indent=2), encoding="utf-8")
+
 with tab4:
     st.markdown("### 📡 유관기관 공지사항")
     st.markdown(
         "<p style='color:#8892b0;'>"
-        "KPX(전력거래소)·한국에너지공단·한전의 최신 공지를 자동 수집합니다. "
-        "크롤링 차단 시 Mock 데이터가 표시되며 원본 링크는 기관 사이트로 연결됩니다."
+        "공공기관 보안(IP 차단·JS 렌더링)으로 자동 크롤링이 불가합니다. "
+        "각 기관 홈페이지에서 직접 확인 후 <b>공지사항 추가하기</b> 폼으로 등록하면 영구 저장됩니다."
         "</p>",
         unsafe_allow_html=True,
     )
 
-    # 상단 컨트롤 — 갱신 버튼 + 기관 필터
-    col_n_refresh, col_n_filter = st.columns([1, 3])
-    with col_n_refresh:
-        if st.button("🔄 갱신", key="notice_refresh", use_container_width=True,
-                     help="공지사항 캐시를 초기화하고 최신 데이터를 다시 수집합니다."):
-            st.cache_data.clear()
-            st.rerun()
+    # ── 공지사항 데이터 로드 ─────────────────────────────────────────────
+    all_notices = _load_notices()
+
+    # ── 상단 컨트롤: 기관 필터 + 전체 CSV 다운로드 ─────────────────────
+    col_n_filter, col_n_dl = st.columns([3, 2])
     with col_n_filter:
-        # org_key 값과 표시 레이블 매핑
-        _ORG_OPTIONS = {
-            "전체":            None,
-            "KPX (전력거래소)": "kpx",
-            "한국에너지공단":   "kemco",
-            "한전 (KEPCO)":    "kepco",
-            "전기위원회":       "eleccom",
-            "신안군청":         "shinan",
-            "전남도청":         "jeonnam",
-        }
+        _T4_FILTER_OPTIONS = {"전체": None} | {v: k for k, v in _T4_ORG_DISPLAY.items()}
         selected_org_label = st.selectbox(
             "기관 선택",
-            options=list(_ORG_OPTIONS.keys()),
+            options=list(_T4_FILTER_OPTIONS.keys()),
             label_visibility="collapsed",
             key="notice_org_filter",
         )
-        selected_org_key = _ORG_OPTIONS[selected_org_label]
+        selected_org_key = _T4_FILTER_OPTIONS[selected_org_label]
+
+    with col_n_dl:
+        # 전체 CSV 다운로드 (Tab 2 방식 — 1개 버튼)
+        dl_notices = [n for n in all_notices if not selected_org_key or n["org_key"] == selected_org_key]
+        if dl_notices:
+            dl_df_all = pd.DataFrame([{
+                "기관명":   _T4_ORG_DISPLAY.get(n["org_key"], n["org_key"]),
+                "카테고리": n.get("category", ""),
+                "제목":     n["title"],
+                "날짜":     n["date"],
+                "링크":     n["link"],
+            } for n in dl_notices])
+            today_str = datetime.today().strftime("%Y-%m-%d")
+            st.download_button(
+                label="📥 유관기관 공지 전체 CSV 다운로드",
+                data=to_csv_bytes(dl_df_all),
+                file_name=f"{today_str}_유관기관공지사항.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="dl_all_notices",
+            )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── 공지사항 수집 ───────────────────────────────────────────────────
-    with st.spinner("🔄 유관기관 공지사항 수집 중… (1시간 캐시)"):
-        all_notices = _fetch_agency_notices()
-
-    # 기관 필터 적용
-    if selected_org_key:
-        filtered_notices = [n for n in all_notices if n["org_key"] == selected_org_key]
-    else:
-        filtered_notices = all_notices
-
-    # Mock 여부 집계 (KPI용)
-    mock_count = sum(1 for n in filtered_notices if n["is_mock"])
-    real_count = len(filtered_notices) - mock_count
-
     # KPI 행
+    filtered_for_kpi = [n for n in all_notices if not selected_org_key or n["org_key"] == selected_org_key]
     kpi_cols = st.columns(4)
     kpi_data_n = [
-        ("📋", str(len(filtered_notices)), "수집된 공지"),
-        ("✅", str(real_count),            "실데이터"),
-        ("⚙️", str(mock_count),            "Mock(크롤링 대기)"),
-        ("🏢", "6개",                      "연동 기관"),
+        ("📋", str(len(filtered_for_kpi)), "등록된 공지"),
+        ("🏢", str(len(set(n["org_key"] for n in all_notices))), "등록 기관 수"),
+        ("📅", filtered_for_kpi[0]["date"] if filtered_for_kpi else "—", "최신 공지 날짜"),
+        ("🔗", "6개", "연동 기관"),
     ]
     for col, (icon, value, label) in zip(kpi_cols, kpi_data_n):
         with col:
             st.markdown(
                 f"""<div class="kpi-card">
                     <div style="font-size:1.4rem;">{icon}</div>
-                    <div class="value" style="font-size:1.3rem;">{value}</div>
+                    <div class="value" style="font-size:1.1rem;">{value}</div>
                     <div class="label">{label}</div>
                 </div>""",
                 unsafe_allow_html=True,
@@ -1241,143 +1292,138 @@ with tab4:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Mock 모드 안내 — 전체 Mock일 때만 표시
-    if mock_count == len(filtered_notices) and filtered_notices:
+    # ── 공지사항 추가 폼 ────────────────────────────────────────────────
+    with st.expander("➕ 공지사항 추가하기", expanded=False):
         st.markdown(
-            "<div class='coming-card' style='margin-bottom:1rem;'>"
-            "<h4>⚙️ 크롤링 연결 중 — Mock 데이터 표시 중</h4>"
-            "<p>공공기관 웹서버 보안(IP 차단·JS 렌더링) 으로 인해 현재 샘플 데이터가 표시됩니다.<br>"
-            "각 공지 카드의 <b>원문 링크</b>를 클릭하면 해당 기관 공식 페이지로 이동합니다.<br>"
-            "캐시 유효 1시간 · 🔄 갱신 버튼으로 즉시 재시도</p>"
-            "</div>",
+            "<p style='color:#8892b0; font-size:0.85rem;'>"
+            "각 기관 홈페이지에서 공지를 확인한 후 아래 폼에 입력하세요. "
+            "입력한 내용은 서버에 영구 저장됩니다.</p>",
             unsafe_allow_html=True,
         )
+        f_col1, f_col2 = st.columns(2)
+        with f_col1:
+            f_org = st.selectbox(
+                "기관 선택",
+                options=list(_T4_ORG_DISPLAY.values()),
+                key="form_org",
+            )
+            f_category = st.text_input(
+                "카테고리",
+                placeholder="예: 공지사항, 입찰공고, 전력시장공고, REC발급공지 …",
+                key="form_category",
+            )
+            f_date = st.date_input("날짜", key="form_date")
+        with f_col2:
+            f_title = st.text_input(
+                "제목 *",
+                placeholder="공지 제목을 입력하세요",
+                key="form_title",
+            )
+            f_link = st.text_input(
+                "원문 링크 URL *",
+                placeholder="https://",
+                key="form_link",
+            )
 
-    # ── 기관별 Expander ─────────────────────────────────────────────────
-    # org_key 기준으로 그룹핑 — 선택된 기관만 또는 전체
-    _ORG_ICON = {
-        "kpx":     "📊",
-        "kemco":   "🌿",
-        "kepco":   "⚡",
-        "eleccom": "⚖️",
-        "shinan":  "🌊",
-        "jeonnam": "🏛️",
-    }
-    _ORG_DISPLAY = {
-        "kpx":     "KPX (전력거래소)",
-        "kemco":   "한국에너지공단",
-        "kepco":   "한전 (KEPCO)",
-        "eleccom": "전기위원회",
-        "shinan":  "신안군청",
-        "jeonnam": "전남도청",
-    }
+        if st.button("✅ 추가", key="form_submit", use_container_width=False):
+            if not f_title.strip():
+                st.error("제목을 입력해 주세요.")
+            elif not f_link.strip().startswith("http"):
+                st.error("올바른 URL을 입력해 주세요. (http로 시작)")
+            else:
+                # org_key 역방향 조회
+                f_org_key = next((k for k, v in _T4_ORG_DISPLAY.items() if v == f_org), "etc")
+                new_entry = {
+                    "org_key":  f_org_key,
+                    "category": f_category.strip() or "공지사항",
+                    "title":    f_title.strip(),
+                    "date":     f_date.strftime("%Y-%m-%d"),
+                    "link":     f_link.strip(),
+                    "added_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+                all_notices.insert(0, new_entry)   # 최신 순 맨 앞에 삽입
+                _save_notices(all_notices)
+                st.success(f"✅ 공지사항이 등록되었습니다: {f_title.strip()}")
+                st.rerun()
 
-    # 각 기관 공식 메인 홈페이지 URL (안정적 접근 보장)
-    _ORG_NOTICE_URL = {
-        "kpx":     "https://www.kpx.or.kr",
-        "kemco":   "https://www.kemco.or.kr",
-        "kepco":   "https://home.kepco.co.kr",
-        "eleccom": "https://www.korec.go.kr",
-        "shinan":  "https://www.shinan.go.kr",
-        "jeonnam": "https://www.jeonnam.go.kr",
-    }
-
-    # 기관 그룹 구성 (선택 기관 우선)
-    org_keys_to_show = [selected_org_key] if selected_org_key else list(_ORG_DISPLAY.keys())
+    # ── 기관별 기관 홈 링크 + 공지 카드 ────────────────────────────────
+    org_keys_to_show = [selected_org_key] if selected_org_key else list(_T4_ORG_DISPLAY.keys())
 
     for org_key in org_keys_to_show:
-        org_notices = [n for n in filtered_notices if n["org_key"] == org_key]
-        if not org_notices:
-            continue
+        org_notices = [n for n in all_notices if n["org_key"] == org_key]
+        icon     = _T4_ORG_ICON.get(org_key, "🏢")
+        org_name = _T4_ORG_DISPLAY.get(org_key, org_key)
+        org_url  = _T4_ORG_URL.get(org_key, "")
 
-        icon = _ORG_ICON.get(org_key, "🏢")
-        org_name = _ORG_DISPLAY.get(org_key, org_key)
-        has_mock  = any(n["is_mock"] for n in org_notices)
-        mock_badge = " <span style='color:#ffc837; font-size:0.75rem;'>⚙️ [연결 준비 중]</span>" if has_mock else ""
-
-        # CSV 다운로드용 데이터
-        with st.expander(f"{icon} {org_name}  ({len(org_notices)}건)", expanded=True):
-            # 기관 공식 공지 페이지 바로가기
-            notice_url = _ORG_NOTICE_URL.get(org_key, "")
-            if notice_url:
+        with st.expander(f"{icon} {org_name}  ({len(org_notices)}건)", expanded=bool(org_notices)):
+            # 기관 홈페이지 바로가기
+            if org_url:
                 st.markdown(
-                    f'<a href="{notice_url}" target="_blank" style="'
+                    f'<a href="{org_url}" target="_blank" style="'
                     f'display:inline-block; margin-bottom:0.7rem; padding:0.3rem 0.9rem; '
                     f'background:rgba(100,255,218,0.1); border:1px solid rgba(100,255,218,0.3); '
                     f'border-radius:8px; color:#64ffda; font-size:0.82rem; text-decoration:none;">'
-                    f'🔗 {org_name} 공식 공지 페이지 바로가기 ↗</a>',
+                    f'🔗 {org_name} 공식 홈페이지 바로가기 ↗</a>',
                     unsafe_allow_html=True,
                 )
 
-            # 다운로드 버튼
-            import pandas as pd
-            dl_df_n = pd.DataFrame([{
-                "기관명": n["org"],
-                "카테고리": n["category"],
-                "제목": n["title"],
-                "날짜": n["date"],
-                "링크": n["link"],
-                "Mock여부": "O" if n["is_mock"] else "X",
-            } for n in org_notices])
-            today_str = datetime.today().strftime("%Y-%m-%d")
-            st.download_button(
-                label=f"📥 {org_name} 공지 CSV 다운로드",
-                data=to_csv_bytes(dl_df_n),
-                file_name=f"{today_str}_{org_key}_공지사항.csv",
-                mime="text/csv",
-                key=f"dl_{org_key}",
-            )
+            if not org_notices:
+                st.info("등록된 공지가 없습니다. 위 '공지사항 추가하기'로 직접 입력하세요.")
+                continue
 
             with st.container(height=400):
-                for notice in org_notices:
-                    is_mock = notice["is_mock"]
-                    card_class = "coming-card" if is_mock else "card"
-                    title_color = "#ffc837" if is_mock else "#ccd6f6"
-                    mock_label  = " <span style='font-size:0.72rem; color:#ffc837;'>⚙️ Mock</span>" if is_mock else ""
+                for idx, notice in enumerate(org_notices):
+                    # 삭제 버튼 + 카드 (두 열 레이아웃)
+                    c_card, c_del = st.columns([10, 1])
+                    with c_card:
+                        st.markdown(
+                            f"""<div class="card" style="margin-bottom:0.4rem;">
+                                <p class="meta">
+                                    {icon} {org_name}
+                                    &nbsp;·&nbsp; {notice.get('category','공지사항')}
+                                    &nbsp;·&nbsp; {notice['date']}
+                                </p>
+                                <h4 style="font-size:0.92rem;">
+                                    <a href="{notice['link']}" target="_blank"
+                                       style="color:#ccd6f6; text-decoration:none;">
+                                        {notice['title']}
+                                    </a>
+                                </h4>
+                            </div>""",
+                            unsafe_allow_html=True,
+                        )
+                    with c_del:
+                        # 삭제 버튼 — org_key + added_at 조합으로 고유 키 생성
+                        del_key = f"del_{org_key}_{notice.get('added_at','')}"
+                        if st.button("🗑️", key=del_key, help="이 공지 삭제"):
+                            all_notices = [
+                                n for n in all_notices
+                                if not (n["org_key"] == notice["org_key"]
+                                        and n["title"] == notice["title"]
+                                        and n["date"] == notice["date"])
+                            ]
+                            _save_notices(all_notices)
+                            st.rerun()
 
-                    st.markdown(
-                        f"""<div class="{card_class}" style="margin-bottom:0.5rem;">
-                            <p class="meta">
-                                {_ORG_ICON.get(notice['org_key'], '🏢')} {notice['org']}
-                                &nbsp;·&nbsp; {notice['category']}
-                                &nbsp;·&nbsp; {notice['date']}
-                                {mock_label}
-                            </p>
-                            <h4 style="font-size:0.92rem; color:{title_color};">
-                                <a href="{notice['link']}" target="_blank"
-                                   style="color:{title_color}; text-decoration:none;">
-                                    {notice['title']}
-                                </a>
-                            </h4>
-                        </div>""",
-                        unsafe_allow_html=True,
-                    )
-
-    if not filtered_notices:
-        st.info("수집된 공지사항이 없습니다.")
-
-    # ── 연동 기관 현황 안내 ─────────────────────────────────────────────
+    # ── 기관 홈페이지 안내 (하단) ────────────────────────────────────────
     st.markdown("---")
     st.markdown(
         """<div class="coming-card">
-            <h4>📋 연동 기관 (6개) — 직접 링크</h4>
+            <h4>📋 유관기관 홈페이지 바로가기</h4>
             <ul>
                 <li><b>📊 KPX (전력거래소)</b> — SMP 산정 결과, 재생에너지 입찰공고
-                    &nbsp;<a href="https://www.kpx.or.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지</a></li>
+                    &nbsp;<a href="https://www.kpx.or.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
                 <li><b>🌿 한국에너지공단</b> — RPS 의무량, REC 발급 기준, 보조금 공모
-                    &nbsp;<a href="https://www.kemco.or.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지</a></li>
+                    &nbsp;<a href="https://www.kemco.or.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
                 <li><b>⚡ 한전 (KEPCO)</b> — 계통 연계 기술기준, 전기공급약관, 접속 신청
-                    &nbsp;<a href="https://home.kepco.co.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지</a></li>
+                    &nbsp;<a href="https://home.kepco.co.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
                 <li><b>⚖️ 전기위원회</b> — 발전사업 허가·심의 결과, 허가 기준 개정
-                    &nbsp;<a href="https://www.korec.go.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지 (korec.go.kr)</a></li>
+                    &nbsp;<a href="https://www.korec.go.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
                 <li><b>🌊 신안군청</b> — 해상풍력 고시·공고, 이익공유, 공유수면 허가
-                    &nbsp;<a href="https://www.shinan.go.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지</a></li>
+                    &nbsp;<a href="https://www.shinan.go.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
                 <li><b>🏛️ 전남도청</b> — 해상풍력 단지 지정, 인허가 지원, 환경영향평가 고시
-                    &nbsp;<a href="https://www.jeonnam.go.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지</a></li>
+                    &nbsp;<a href="https://www.jeonnam.go.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
             </ul>
-            <p style="margin-top:0.5rem; font-size:0.82rem; color:#8892b0;">
-                ⚙️ 공공기관 보안 정책(IP 차단·JS 렌더링)으로 자동 수집 불가 — 위 링크로 직접 확인하세요.
-            </p>
         </div>""",
         unsafe_allow_html=True,
     )
