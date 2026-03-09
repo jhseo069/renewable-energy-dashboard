@@ -42,43 +42,38 @@ _AGENCY_CONFIG = {
     "kpx": {
         "org":     "KPX (전력거래소)",
         "base":    "https://www.kpx.or.kr",
-        # 공지사항 게시판 (정적 HTML 목록)
-        "url":     "https://www.kpx.or.kr/www/selectBbsNttList.do?key=102&bbsNo=3",
+        "url":     "https://www.kpx.or.kr/menu.es?mid=a11201000000",
         "category": "공지사항",
     },
     "kemco": {
         "org":     "한국에너지공단",
         "base":    "https://www.kemco.or.kr",
-        # 공공데이터·공지사항 게시판
-        "url":     "https://www.kemco.or.kr/web/kem_home_new/info/publicNotice/list.do",
+        "url":     "https://www.kemco.or.kr/web/kem_home_new/info/news/notice/kem_list.asp",
         "category": "공지사항",
     },
     "kepco": {
         "org":     "한전 (KEPCO)",
         "base":    "https://home.kepco.co.kr",
-        # 공지사항 게시판
-        "url":     "https://home.kepco.co.kr/kepco/KO/ntcf/1/list.do",
+        "url":     "https://home.kepco.co.kr/kepco/KR/ntcob/list.do?menuCd=FN3107&boardCd=BRD_000269",
         "category": "공지사항",
     },
     "eleccom": {
         "org":     "전기위원회",
-        "base":    "https://www.electricitycommission.go.kr",
-        # 발전사업 허가·심의 공지 게시판 (eGovFrame 표준 CMS 패턴)
-        "url":     "https://www.electricitycommission.go.kr/web/cop/bbs/selectBoardList.do?bbsId=BBSMSTR_000000000002",
+        "base":    "https://www.korec.go.kr",
+        # 구 도메인(electricitycommission.go.kr) → korec.go.kr 로 이전됨 (2025~)
+        "url":     "https://www.korec.go.kr/notice/selectNoticeList.do",
         "category": "공지사항",
     },
     "shinan": {
         "org":     "신안군청",
         "base":    "https://www.shinan.go.kr",
-        # 고시공고 게시판 (행안부 표준프레임워크 CMS 패턴)
-        "url":     "https://www.shinan.go.kr/portal/main/board/boardList.do?menuId=1202",
+        "url":     "https://www.shinan.go.kr/home/www/openinfo/participation_07/participation_07_02",
         "category": "고시공고",
     },
     "jeonnam": {
         "org":     "전남도청",
         "base":    "https://www.jeonnam.go.kr",
-        # 고시공고 게시판
-        "url":     "https://www.jeonnam.go.kr/govHelper/common/bbs/boardList.do?bbsId=BSTR_000000000000001",
+        "url":     "https://www.jeonnam.go.kr/M7124/boardList.do?menuId=jeonnam0201000000",
         "category": "고시공고",
     },
 }

@@ -966,6 +966,33 @@ with tab3:
                 dummy_badge = " <span style='color:#ffc837; font-size:0.75rem;'>[연결 준비 중]</span>" if has_dummy else ""
 
                 with st.expander(f"{icon} {dept}  ({len(articles)}건)", expanded=True):
+                    # ── Gemini AI 동향 분석 버튼 ──────────────────────
+                    rss_btn_key    = f"analyze_rss_{dept}"
+                    rss_result_key = f"rss_analysis_{dept}"
+                    col_rss_ai, col_rss_space = st.columns([2, 5])
+                    with col_rss_ai:
+                        if st.button("🤖 Gemini AI 동향 분석", key=rss_btn_key, use_container_width=True):
+                            news_for_ai = [
+                                {"title": a["title"], "summary": a["summary"],
+                                 "source": a["source"], "date": a["date"]}
+                                for a in articles if not a.get("is_dummy")
+                            ]
+                            if news_for_ai:
+                                with st.spinner(f"Gemini AI 분석 중 — {dept} 보도자료…"):
+                                    try:
+                                        ai_result = analyze_news_trends(news_for_ai, f"{dept} 정책 보도자료")
+                                        st.session_state[rss_result_key] = ai_result
+                                    except ValueError as e:
+                                        st.session_state[rss_result_key] = f"❌ **API 키 오류**: {e}"
+                                    except Exception as e:
+                                        st.session_state[rss_result_key] = f"❌ **분석 실패**: {e}"
+                            else:
+                                st.session_state[rss_result_key] = "분석할 보도자료가 없습니다."
+
+                    if rss_result_key in st.session_state:
+                        with st.expander("📋 Gemini AI 분석 결과 보기", expanded=True):
+                            st.markdown(st.session_state[rss_result_key])
+
                     with st.container(height=400):
                         for article in articles:
                             if article["is_dummy"]:
@@ -1176,6 +1203,16 @@ with tab4:
         "jeonnam": "전남도청",
     }
 
+    # 각 기관 공식 메인 홈페이지 URL (안정적 접근 보장)
+    _ORG_NOTICE_URL = {
+        "kpx":     "https://www.kpx.or.kr",
+        "kemco":   "https://www.kemco.or.kr",
+        "kepco":   "https://home.kepco.co.kr",
+        "eleccom": "https://www.korec.go.kr",
+        "shinan":  "https://www.shinan.go.kr",
+        "jeonnam": "https://www.jeonnam.go.kr",
+    }
+
     # 기관 그룹 구성 (선택 기관 우선)
     org_keys_to_show = [selected_org_key] if selected_org_key else list(_ORG_DISPLAY.keys())
 
@@ -1191,6 +1228,18 @@ with tab4:
 
         # CSV 다운로드용 데이터
         with st.expander(f"{icon} {org_name}  ({len(org_notices)}건)", expanded=True):
+            # 기관 공식 공지 페이지 바로가기
+            notice_url = _ORG_NOTICE_URL.get(org_key, "")
+            if notice_url:
+                st.markdown(
+                    f'<a href="{notice_url}" target="_blank" style="'
+                    f'display:inline-block; margin-bottom:0.7rem; padding:0.3rem 0.9rem; '
+                    f'background:rgba(100,255,218,0.1); border:1px solid rgba(100,255,218,0.3); '
+                    f'border-radius:8px; color:#64ffda; font-size:0.82rem; text-decoration:none;">'
+                    f'🔗 {org_name} 공식 공지 페이지 바로가기 ↗</a>',
+                    unsafe_allow_html=True,
+                )
+
             # 다운로드 버튼
             import pandas as pd
             dl_df_n = pd.DataFrame([{
@@ -1242,17 +1291,23 @@ with tab4:
     st.markdown("---")
     st.markdown(
         """<div class="coming-card">
-            <h4>📋 현재 연동 기관 (6개) 및 수집 정보</h4>
+            <h4>📋 연동 기관 (6개) — 직접 링크</h4>
             <ul>
-                <li><b>📊 KPX (전력거래소)</b> — SMP 산정 결과, 재생에너지 입찰공고, 출력제어 안내</li>
-                <li><b>🌿 한국에너지공단</b> — RPS 의무량, REC 발급 기준, 보조금 공모</li>
-                <li><b>⚡ 한전 (KEPCO)</b> — 계통 연계 기술기준, 전기공급약관, 접속 신청</li>
-                <li><b>⚖️ 전기위원회</b> — 발전사업 허가·심의 결과, 허가 기준 개정</li>
-                <li><b>🌊 신안군청</b> — 해상풍력 고시·공고, 이익공유, 공유수면 허가</li>
-                <li><b>🏛️ 전남도청</b> — 해상풍력 단지 지정, 인허가 지원, 환경영향평가 고시</li>
+                <li><b>📊 KPX (전력거래소)</b> — SMP 산정 결과, 재생에너지 입찰공고
+                    &nbsp;<a href="https://www.kpx.or.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지</a></li>
+                <li><b>🌿 한국에너지공단</b> — RPS 의무량, REC 발급 기준, 보조금 공모
+                    &nbsp;<a href="https://www.kemco.or.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지</a></li>
+                <li><b>⚡ 한전 (KEPCO)</b> — 계통 연계 기술기준, 전기공급약관, 접속 신청
+                    &nbsp;<a href="https://home.kepco.co.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지</a></li>
+                <li><b>⚖️ 전기위원회</b> — 발전사업 허가·심의 결과, 허가 기준 개정
+                    &nbsp;<a href="https://www.korec.go.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지 (korec.go.kr)</a></li>
+                <li><b>🌊 신안군청</b> — 해상풍력 고시·공고, 이익공유, 공유수면 허가
+                    &nbsp;<a href="https://www.shinan.go.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지</a></li>
+                <li><b>🏛️ 전남도청</b> — 해상풍력 단지 지정, 인허가 지원, 환경영향평가 고시
+                    &nbsp;<a href="https://www.jeonnam.go.kr" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 홈페이지</a></li>
             </ul>
-            <p style="margin-top:0.5rem; font-size:0.82rem; color:#64ffda;">
-                ⚙️ 크롤링 차단 기관은 ⚙️ Mock 배지 표시 · JS 렌더링 필요 시 Playwright 검토 예정
+            <p style="margin-top:0.5rem; font-size:0.82rem; color:#8892b0;">
+                ⚙️ 공공기관 보안 정책(IP 차단·JS 렌더링)으로 자동 수집 불가 — 위 링크로 직접 확인하세요.
             </p>
         </div>""",
         unsafe_allow_html=True,
