@@ -497,32 +497,26 @@ def _generate_newsletter_html(
             fig.patch.set_facecolor("#f8f9fa")
             ax1.set_facecolor("#f8f9fa")
 
+            # 단일 y축 — SMP(파랑)·REC(주황) 동일 축에 표시
             ax1.plot(_dates, _smps, color="#2176ae", linewidth=1.8,
-                     marker="o", markersize=3, label="SMP")
-            ax1.set_ylabel("SMP (원/kWh)", fontsize=7, color="#2176ae")
-            ax1.tick_params(axis="y", labelcolor="#2176ae", labelsize=6)
+                     marker="o", markersize=3, label="SMP (원/kWh)")
+            ax1.plot(_dates, _recs, color="#e67e22", linewidth=1.8,
+                     marker="s", markersize=3, label="REC (원/REC)")
+            ax1.set_ylabel("가격 (원)", fontsize=7, color="#444")
+            ax1.tick_params(axis="y", labelcolor="#444", labelsize=6)
             ax1.tick_params(axis="x", labelsize=6)
             ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
             ax1.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=6))
-
-            ax2 = ax1.twinx()
-            ax2.plot(_dates, _recs, color="#e67e22", linewidth=1.8,
-                     marker="s", markersize=3, label="REC")
-            ax2.set_ylabel("REC (원/REC)", fontsize=7, color="#e67e22")
-            ax2.tick_params(axis="y", labelcolor="#e67e22", labelsize=6)
 
             # 최신값 레이블 표시
             ax1.annotate(f"{_smps[-1]:.2f}", xy=(_dates[-1], _smps[-1]),
                          xytext=(4, 0), textcoords="offset points",
                          fontsize=6, color="#2176ae", va="center")
-            ax2.annotate(f"{_recs[-1]:.0f}", xy=(_dates[-1], _recs[-1]),
-                         xytext=(-28, 4), textcoords="offset points",
+            ax1.annotate(f"{_recs[-1]:.2f}", xy=(_dates[-1], _recs[-1]),
+                         xytext=(4, 0), textcoords="offset points",
                          fontsize=6, color="#e67e22", va="center")
 
-            lines1, labels1 = ax1.get_legend_handles_labels()
-            lines2, labels2 = ax2.get_legend_handles_labels()
-            ax1.legend(lines1 + lines2, labels1 + labels2,
-                       fontsize=6, loc="upper left", framealpha=0.7)
+            ax1.legend(fontsize=6, loc="upper left", framealpha=0.7)
             plt.tight_layout(pad=0.5)
 
             buf = io.BytesIO()
@@ -1749,7 +1743,7 @@ with tab4:
         with c_sr_smp:
             smp_val = st.number_input("육지 SMP (원/kWh)", min_value=0.0, step=0.1, format="%.2f", key="smp_val")
         with c_sr_rec:
-            rec_val = st.number_input("육지 REC (원/REC)", min_value=0.0, step=100.0, format="%.0f", key="rec_val")
+            rec_val = st.number_input("육지 REC (원/REC)", min_value=0.0, step=0.01, format="%.2f", key="rec_val")
         with c_sr_btn:
             st.markdown("<div style='margin-top:1.6rem;'></div>", unsafe_allow_html=True)
             if st.button("✅ 저장"):
@@ -1805,7 +1799,10 @@ with tab4:
             )
             
         if not filtered_sr.empty:
-            st.line_chart(filtered_sr.set_index("date")[["SMP", "REC"]], use_container_width=True)
+            # x축을 날짜 문자열로 변환 — datetime 인덱스 사용 시 시간까지 표시되는 문제 방지
+            _chart_df = filtered_sr.copy()
+            _chart_df["date"] = _chart_df["date"].dt.strftime("%Y-%m-%d")
+            st.line_chart(_chart_df.set_index("date")[["SMP", "REC"]], use_container_width=True)
         else:
             st.info("해당 기간에 등록된 단가 데이터가 없습니다.")
 
