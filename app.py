@@ -1302,6 +1302,9 @@ with tab2:
                 elif "ESS" in kw_group:
                     display_name = "ESS/BESS 동향"
                     icon = "🔋"
+                elif "그린수소" in kw_group:
+                    display_name = "수소"
+                    icon = "💧"
                 else:
                     display_name = " / ".join(kw_group)
                     icon = "📌"
