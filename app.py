@@ -1297,7 +1297,7 @@ with tab2:
                 kw_news.sort(key=lambda x: x["date"], reverse=True)
                 # 그룹별 표시명 결정
                 if "해상풍력" in kw_group:
-                    display_name = "해상풍력 동향 (WTIV·설치선 포함)"
+                    display_name = "해상풍력"
                     icon = "🌊"
                 elif "ESS" in kw_group:
                     display_name = "ESS/BESS 동향"
