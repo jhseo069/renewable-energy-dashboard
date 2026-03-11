@@ -32,9 +32,8 @@ _SOURCE_MAP = {
     "electimes.com":    "전기신문",
     "energy-news.co.kr":"에너지경제",
     "ekn.kr":           "에너지경제",
-    "electrica.co.kr":  "일렉트릭파워",
-    # ── 에너지 전문 매체 ──────────────────────
-    "epj.co.kr":        "전기저널",
+    "electrica.co.kr":  "일렉트릭파워",   # 구 도메인 (유지)
+    "epj.co.kr":        "일렉트릭파워",   # 실제 운영 도메인 (Electric Power Journal)
     "e2news.com":       "이투뉴스",
     "todayenergy.kr":   "투데이에너지",
     "energydaily.co.kr":"에너지데일리",
