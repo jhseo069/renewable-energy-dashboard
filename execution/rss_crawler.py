@@ -289,11 +289,12 @@ def fetch_rss_articles(
 
     for source in RSS_SOURCES:
         try:
-            feed = feedparser.parse(source["url"])
+            # korea.kr RSS는 HTTP Content-Type에 charset 미지정 → feedparser가 ISO-8859-1로
+            # 잘못 해석해 한글이 깨짐 → requests로 bytes 수신 후 UTF-8 강제 디코딩하여 feedparser에 전달
+            _resp = requests.get(source["url"], headers=_HTTP_HEADERS, timeout=15)
+            _resp.raise_for_status()
+            feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
 
-            # korea.kr RSS는 charset 선언(us-ascii)과 실제 인코딩(utf-8)이 달라
-            # bozo=True가 반환되지만 entries는 정상 수집됨 → bozo는 무시하고
-            # entries가 비어있을 때만 실패로 간주함
             if not feed.entries:
                 raise ValueError(f"RSS entries 없음 (status={feed.get('status', '?')})")
 
