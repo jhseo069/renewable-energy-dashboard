@@ -290,10 +290,15 @@ def fetch_rss_articles(
     for source in RSS_SOURCES:
         try:
             # korea.kr RSS는 HTTP Content-Type에 charset 미지정 → feedparser가 ISO-8859-1로
-            # 잘못 해석해 한글이 깨짐 → requests로 bytes 수신 후 UTF-8 강제 디코딩하여 feedparser에 전달
-            _resp = requests.get(source["url"], headers=_HTTP_HEADERS, timeout=15)
-            _resp.raise_for_status()
-            feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
+            # 잘못 해석해 한글이 깨짐 → requests로 bytes 수신 후 UTF-8 강제 디코딩 시도
+            # requests 실패(Cloud 네트워크 차단 등) 시 feedparser 직접 URL 파싱으로 폴백
+            try:
+                _resp = requests.get(source["url"], headers=_HTTP_HEADERS, timeout=15)
+                _resp.raise_for_status()
+                feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
+            except Exception as _req_err:
+                print(f"[{source['short']}] requests 실패({_req_err}), feedparser 직접 파싱 폴백")
+                feed = feedparser.parse(source["url"])
 
             if not feed.entries:
                 raise ValueError(f"RSS entries 없음 (status={feed.get('status', '?')})")
