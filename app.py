@@ -468,7 +468,7 @@ def _gs_load(tab: str) -> list[dict] | None:
         try:
             ws = sh.worksheet(tab)
         except Exception:
-            return []   # 탭 미생성 = 데이터 없음
+            return None  # 탭 미생성 → None 반환 → JSON 폴백 트리거
         records = ws.get_all_records()
         # SMP/REC 숫자 타입 보장
         if tab == "smp_rec":
@@ -522,16 +522,21 @@ def _gs_save(tab: str, data: list[dict]) -> None:
 
 
 def _load_press_releases() -> list[dict]:
-    """보도자료 로드: Google Sheets 우선 → JSON 폴백."""
+    """보도자료 로드: Google Sheets 우선 → JSON 폴백 (탭 없으면 자동 마이그레이션)."""
     gs = _gs_load("press_releases")
     if gs is not None:
         return gs
+    # JSON 폴백
+    data: list[dict] = []
     if _PRESS_FILE.exists():
         try:
-            return _json.loads(_PRESS_FILE.read_text(encoding="utf-8"))
+            data = _json.loads(_PRESS_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return []
+    # Google Sheets 탭 미생성 + JSON에 데이터 있으면 자동 마이그레이션
+    if data and _gs_sheet_id():
+        _gs_save("press_releases", data)
+    return data
 
 
 def _save_press_releases(articles: list[dict]) -> None:
@@ -541,16 +546,19 @@ def _save_press_releases(articles: list[dict]) -> None:
 
 
 def _load_notices() -> list[dict]:
-    """공지사항 로드: Google Sheets 우선 → JSON 폴백."""
+    """공지사항 로드: Google Sheets 우선 → JSON 폴백 (탭 없으면 자동 마이그레이션)."""
     gs = _gs_load("notices")
     if gs is not None:
         return gs
+    data: list[dict] = []
     if _NOTICES_FILE.exists():
         try:
-            return _json.loads(_NOTICES_FILE.read_text(encoding="utf-8"))
+            data = _json.loads(_NOTICES_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return []
+    if data and _gs_sheet_id():
+        _gs_save("notices", data)
+    return data
 
 
 def _save_notices(notices: list[dict]) -> None:
@@ -560,16 +568,20 @@ def _save_notices(notices: list[dict]) -> None:
 
 
 def _load_smp_rec() -> list[dict]:
-    """SMP/REC 로드: Google Sheets 우선 → JSON 폴백."""
+    """SMP/REC 로드: Google Sheets 우선 → JSON 폴백 (탭 없으면 자동 마이그레이션)."""
     gs = _gs_load("smp_rec")
     if gs is not None:
         return gs
+    data: list[dict] = []
     if _SMP_REC_FILE.exists():
         try:
-            return _json.loads(_SMP_REC_FILE.read_text(encoding="utf-8"))
+            data = _json.loads(_SMP_REC_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return []
+    # Google Sheets 탭 미생성 + JSON에 데이터 있으면 자동 마이그레이션
+    if data and _gs_sheet_id():
+        _gs_save("smp_rec", data)
+    return data
 
 
 def _save_smp_rec(records: list[dict]) -> None:
