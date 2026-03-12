@@ -1544,7 +1544,12 @@ with tab3:
                     "요약 (선택)",
                     placeholder="주요 내용을 간략히 입력하세요",
                     key="pr_form_summary",
-                    height=100,
+                    height=80,
+                )
+                pr_files = st.file_uploader(
+                    "첨부파일 (PDF·HWP·DOCX·XLSX·PNG·JPG 등, 복수 선택 가능)",
+                    accept_multiple_files=True,
+                    key="pr_form_files",
                 )
 
             if st.button("✅ 추가", key="pr_form_submit", use_container_width=False):
@@ -1552,20 +1557,31 @@ with tab3:
                     st.error("제목을 입력해 주세요.")
                 else:
                     pr_added_at = get_kst_now().strftime("%Y-%m-%dT%H:%M:%S")
+
+                    # 첨부파일 저장 (타임스탬프 prefix로 파일명 충돌 방지)
+                    pr_saved_files = []
+                    for uf in (pr_files or []):
+                        safe_name = pr_added_at.replace(":", "-") + "_" + uf.name
+                        save_path = _ATTACHMENTS_DIR / safe_name
+                        save_path.write_bytes(uf.read())
+                        pr_saved_files.append({"name": uf.name, "saved": safe_name})
+
                     new_press = {
-                        "source":   pr_dept,
-                        "category": pr_category,
-                        "title":    pr_title.strip(),
-                        "date":     pr_date.strftime("%Y-%m-%d"),
-                        "link":     pr_link.strip(),
-                        "summary":  pr_summary.strip(),
-                        "added_at": pr_added_at,
+                        "source":      pr_dept,
+                        "category":    pr_category,
+                        "title":       pr_title.strip(),
+                        "date":        pr_date.strftime("%Y-%m-%d"),
+                        "link":        pr_link.strip(),
+                        "summary":     pr_summary.strip(),
+                        "attachments": pr_saved_files,
+                        "added_at":    pr_added_at,
                     }
                     all_press = _load_press_releases()
                     all_press.insert(0, new_press)   # 최신 순 맨 앞에 삽입
                     _save_press_releases(all_press)
                     st.cache_data.clear()
-                    st.success(f"✅ 보도자료가 등록되었습니다: {pr_title.strip()}")
+                    att_msg = f" (첨부 {len(pr_saved_files)}개)" if pr_saved_files else ""
+                    st.success(f"✅ 보도자료가 등록되었습니다: {pr_title.strip()}{att_msg}")
                     st.rerun()
 
         dept_icons = {
@@ -1574,6 +1590,13 @@ with tab3:
             "해수부": "🌊",
             "농림부": "🌾",
             "국토부": "🏗️",
+        }
+        _T3_DEPT_URL = {
+            "산업부": "https://www.motie.go.kr/motie/ne/presse/press2/bbs/bbsList.do?bbs_seq_n=161",
+            "기후부": "https://www.me.go.kr/home/web/board/list.do?menuId=10525",
+            "해수부": "https://www.mof.go.kr/newsroom/pressReleases.do",
+            "농림부": "https://www.mafra.go.kr/bbs/mafra/68/artcl/list.do",
+            "국토부": "https://www.molit.go.kr/USR/NEWS/m_71/lst.jsp?m=71",
         }
 
         if rss_articles:
@@ -1587,6 +1610,18 @@ with tab3:
                 icon = dept_icons.get(dept, "🏛️")
 
                 with st.expander(f"{icon} {dept}  ({len(articles)}건)", expanded=True):
+                    # 부처 보도자료 홈페이지 바로가기
+                    dept_url = _T3_DEPT_URL.get(dept, "")
+                    if dept_url:
+                        st.markdown(
+                            f'<a href="{dept_url}" target="_blank" style="'
+                            f'display:inline-block; margin-bottom:0.7rem; padding:0.3rem 0.9rem; '
+                            f'background:rgba(100,255,218,0.1); border:1px solid rgba(100,255,218,0.3); '
+                            f'border-radius:8px; color:#64ffda; font-size:0.82rem; text-decoration:none;">'
+                            f'🔗 {dept} 보도자료 바로가기 ↗</a>',
+                            unsafe_allow_html=True,
+                        )
+
                     # ── Gemini AI 동향 분석 버튼 ──────────────────────
                     rss_btn_key    = f"analyze_rss_{dept}"
                     rss_result_key = f"rss_analysis_{dept}"
@@ -1616,13 +1651,18 @@ with tab3:
 
                     with st.container(height=400):
                         for article in articles:
-                            c_card, c_del = st.columns([9, 1])
+                            c_card, c_del = st.columns([10, 1])
                             with c_card:
                                 cat_badge = (
                                     f' · <span style="font-size:0.72rem; padding:0.1rem 0.4rem; '
                                     f'background:rgba(100,255,218,0.1); border-radius:4px;">'
                                     f'{article["category"]}</span>'
                                     if article.get("category") else ""
+                                )
+                                att_list = article.get("attachments", [])
+                                att_badge = (
+                                    f' &nbsp;<span style="color:#64ffda; font-size:0.78rem;">📎 {len(att_list)}개</span>'
+                                    if att_list else ""
                                 )
                                 summary_text = article.get("summary", "")
                                 summary_html = (
@@ -1636,12 +1676,22 @@ with tab3:
                                 )
                                 html_str = (
                                     f'<div class="card" style="margin-bottom:0.5rem;">'
-                                    f'<p class="meta">🏢 {article["source"]} · {article["date"]}{cat_badge}</p>'
+                                    f'<p class="meta">🏢 {article["source"]} · {article["date"]}{cat_badge}{att_badge}</p>'
                                     f'<h4 style="font-size:0.92rem;">{title_html}</h4>'
                                     f'{summary_html}'
                                     f'</div>'
                                 )
                                 st.markdown(html_str, unsafe_allow_html=True)
+                                # 첨부파일 개별 다운로드 버튼
+                                for att in att_list:
+                                    att_path = _ATTACHMENTS_DIR / att["saved"]
+                                    if att_path.exists():
+                                        st.download_button(
+                                            label=f"📎 {att['name']}",
+                                            data=att_path.read_bytes(),
+                                            file_name=att["name"],
+                                            key=f"pr_att_{article.get('added_at','')}_{att['saved']}",
+                                        )
                             with c_del:
                                 del_key = f"del_pr_{article.get('added_at', '')}"
                                 if st.button("🗑️", key=del_key, help="이 보도자료 삭제"):
@@ -1702,6 +1752,27 @@ with tab3:
                 st.markdown(html_str, unsafe_allow_html=True)
         else:
             st.info("수집된 법안이 없습니다.")
+
+    # ── 유관 부처 홈페이지 안내 (하단) ──────────────────────────────────
+    st.markdown("---")
+    st.markdown(
+        """<div class="coming-card">
+            <h4>📋 유관 부처 보도자료 바로가기</h4>
+            <ul>
+                <li><b>⚡ 산업통상자원부</b> — 에너지·전력산업, 통상·산업 정책 보도자료
+                    &nbsp;<a href="https://www.motie.go.kr/motie/ne/presse/press2/bbs/bbsList.do?bbs_seq_n=161" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
+                <li><b>🌿 기후에너지환경부</b> — 재생에너지 정책, 탄소중립, 환경규제 보도자료
+                    &nbsp;<a href="https://www.me.go.kr/home/web/board/list.do?menuId=10525" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
+                <li><b>🌊 해양수산부</b> — 해상풍력, 공유수면, 어업·해양 정책 보도자료
+                    &nbsp;<a href="https://www.mof.go.kr/newsroom/pressReleases.do" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
+                <li><b>🌾 농림축산식품부</b> — 농지전용, 농업진흥구역, 농촌개발 보도자료
+                    &nbsp;<a href="https://www.mafra.go.kr/bbs/mafra/68/artcl/list.do" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
+                <li><b>🏗️ 국토교통부</b> — 개발행위허가, 도시계획, 용도지역 보도자료
+                    &nbsp;<a href="https://www.molit.go.kr/USR/NEWS/m_71/lst.jsp?m=71" target="_blank" style="color:#64ffda; font-size:0.78rem;">🔗 바로가기</a></li>
+            </ul>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
 
 # =============================================
