@@ -3,8 +3,9 @@
 =====================================
 Layer 3 (Execution) — 결정론적 Python 스크립트
 
-수집 대상: 신재생에너지 사업개발과 직접 관련된 부처 3개
-  - 산업통상부(구 산업통상자원부), 기후에너지환경부, 해양수산부
+수집 대상: 신재생에너지 사업개발과 직접 관련된 부처 5개
+  - 산업통상부(구 산업통상자원부), 기후에너지환경부, 해양수산부,
+    농림축산식품부, 국토교통부
   - 산림청: RSS 미제공 → 제외 (추후 대안 방안 검토 예정)
   - 국방부: 해상풍력 군 협의 필요하나 보도자료 직접 관련성 낮아 제외
 
@@ -62,6 +63,20 @@ RSS_SOURCES = [
         "url": "https://www.korea.kr/rss/dept_mof.xml",
         "filter_dept": "",  # 부처별 RSS라 별도 필터 불필요
     },
+    {
+        "name": "농림축산식품부",
+        "short": "농림부",
+        # 농지전용 허가, 산지전용 관련 농업진흥구역 해제 등 담당
+        "url": "https://www.korea.kr/rss/dept_mafra.xml",
+        "filter_dept": "",  # 부처별 RSS라 별도 필터 불필요
+    },
+    {
+        "name": "국토교통부",
+        "short": "국토부",
+        # 도시·군 관리계획, 입지선정, 개발행위허가 등 담당
+        "url": "https://www.korea.kr/rss/dept_molit.xml",
+        "filter_dept": "",  # 부처별 RSS라 별도 필터 불필요
+    },
 ]
 
 # ── 신재생 사업개발 핵심 키워드 (제목 전용 필터) ────────────────────────
@@ -88,6 +103,10 @@ ENERGY_KEYWORDS_TITLE = [
     "탄소규제",   # 국제 탄소규제 대응 기사 수집 (2026-03-06 추가)
     # 해상풍력 특화
     "WTIV", "해상풍력", "어업인 보상", "어업인 협의", "어업피해",
+    # 농림부 담당 (농지·산지 인허가)
+    "농지전용", "농업진흥구역",
+    # 국토부 담당 (부지 인허가·도시계획)
+    "개발행위허가", "용도지역", "도시계획",
 ]
 
 # ── HTTP 요청 공통 헤더 ────────────────────────────────────────────────
@@ -309,9 +328,14 @@ def fetch_rss_articles(
                     feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
                 except Exception as _cffi_err:
                     print(f"[{source['short']}] curl_cffi 실패({_cffi_err}), requests 폴백")
-                    _resp = requests.get(source["url"], headers=_HTTP_HEADERS, timeout=15)
-                    _resp.raise_for_status()
-                    feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
+                    try:
+                        _resp = requests.get(source["url"], headers=_HTTP_HEADERS, timeout=15)
+                        _resp.raise_for_status()
+                        feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
+                    except Exception as _req_err:
+                        raise RuntimeError(
+                            f"curl_cffi: {_cffi_err} / requests: {_req_err}"
+                        ) from _req_err
             else:
                 _resp = requests.get(source["url"], headers=_HTTP_HEADERS, timeout=15)
                 _resp.raise_for_status()

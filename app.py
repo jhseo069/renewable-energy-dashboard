@@ -699,10 +699,10 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    # 어제 KST 00:00 기준 컷오프 — 오늘 + 어제 데이터 포함
+    # 어제 KST 00:00 기준 컷오프 — 오늘 + 어제 데이터 포함 (모든 구분 동일 기준 적용)
     _rpt_today    = get_kst_now().date()
     _rpt_cutoff   = datetime.combine(_rpt_today - timedelta(days=1), dtime(0, 0))
-    _rpt_930_str  = datetime.combine(_rpt_today, dtime(9, 30)).strftime("%Y-%m-%dT%H:%M:%S")
+    _rpt_cutoff_str = _rpt_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
 
     # 뉴스 (Tab 2) — 캐시 활용
     try:
@@ -741,9 +741,9 @@ with st.sidebar:
                 "링크": _b.get("link", ""),
             })
 
-    # 공지사항 (Tab 4) — JSON에서 로드 (9:30 이후 등록분)
+    # 공지사항 (Tab 4) — JSON에서 로드 (어제 00:00 이후 등록분, 뉴스·법안과 동일 기준)
     for _nc in _load_notices():
-        if _nc.get("added_at", "") >= _rpt_930_str:
+        if _nc.get("added_at", "") >= _rpt_cutoff_str:
             _rpt_rows.append({
                 "구분": "공지사항", "날짜": _nc.get("date", ""),
                 "출처": _T4_ORG_DISPLAY.get(_nc.get("org_key", ""), _nc.get("org_key", "")),
@@ -1199,7 +1199,7 @@ with tab2:
                 inplace=True,
             )
         # 아카이브 자동 저장 — 날짜가 바뀌면 재저장 (탭을 이틀에 걸쳐 열어둔 경우 대응)
-        _today_str = datetime.today().strftime("%Y-%m-%d")
+        _today_str = get_kst_now().strftime("%Y-%m-%d")  # KST 기준 (Cloud는 UTC)
         if st.session_state.get("news_archived_today", "")[:10] != _today_str and not combined_raw.empty:
             archive_cols = ["날짜", "언론사", "제목", "요약", "링크"]
             saved_path = save_to_archive(combined_raw[archive_cols])
@@ -1500,6 +1500,8 @@ with tab3:
                 "산업부": "⚡",   # 산업통상부 (구 산업통상자원부)
                 "기후부": "🌿",   # 기후에너지환경부
                 "해수부": "🌊",   # 해양수산부
+                "농림부": "🌾",   # 농림축산식품부
+                "국토부": "🏗️",   # 국토교통부
             }
 
             for dept, articles in dept_groups.items():
@@ -1950,11 +1952,10 @@ with tab4:
                         # 삭제 버튼 — org_key + added_at 조합으로 고유 키 생성
                         del_key = f"del_{org_key}_{notice.get('added_at','')}"
                         if st.button("🗑️", key=del_key, help="이 공지 삭제"):
+                            # added_at 기준 삭제 — org_key+title+date 조합은 중복 공지 2건 모두 삭제될 수 있음
                             all_notices = [
                                 n for n in all_notices
-                                if not (n["org_key"] == notice["org_key"]
-                                        and n["title"] == notice["title"]
-                                        and n["date"] == notice["date"])
+                                if n.get("added_at") != notice.get("added_at")
                             ]
                             _save_notices(all_notices)
                             st.rerun()
