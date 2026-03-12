@@ -405,6 +405,7 @@ st.markdown(
 # 공지사항 / SMP/REC 헬퍼 (사이드바 + Tab 4 공통 사용)
 # ─────────────────────────────────────────────
 import json as _json
+import os as _os
 
 _NOTICES_FILE    = Path(__file__).parent / "data" / "notices.json"
 _ATTACHMENTS_DIR = Path(__file__).parent / "data" / "attachments"
@@ -423,51 +424,161 @@ _T4_ORG_DISPLAY = {
 }
 
 
+# ── Google Sheets 연동 헬퍼 ────────────────────────────────────────────
+# st.secrets 에 GSHEET_ID 와 [gcp_service_account] 설정 시 자동 활성화.
+# 미설정 시 로컬 JSON 파일로 폴백 (로컬 개발 환경 호환).
+# ──────────────────────────────────────────────────────────────────────
+
+def _gs_client():
+    """gspread 클라이언트 반환 (설정 없거나 오류 시 None)."""
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials as _GCreds
+        _scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        if "gcp_service_account" in st.secrets:
+            _creds = _GCreds.from_service_account_info(
+                dict(st.secrets["gcp_service_account"]), scopes=_scopes
+            )
+            return gspread.authorize(_creds)
+    except Exception:
+        pass
+    return None
+
+
+def _gs_sheet_id() -> str:
+    """Streamlit secrets 또는 환경변수에서 Google Sheet ID 반환."""
+    try:
+        sid = st.secrets.get("GSHEET_ID", "")
+        return sid if sid else _os.getenv("GSHEET_ID", "")
+    except Exception:
+        return _os.getenv("GSHEET_ID", "")
+
+
+def _gs_load(tab: str) -> list[dict] | None:
+    """Google Sheet 탭에서 데이터 로드.
+    - 연결 성공·탭 없음 → [] 반환
+    - 미설정·오류 → None 반환 (JSON 폴백 트리거)
+    """
+    gc = _gs_client()
+    sid = _gs_sheet_id()
+    if not gc or not sid:
+        return None
+    try:
+        sh = gc.open_by_key(sid)
+        try:
+            ws = sh.worksheet(tab)
+        except Exception:
+            return []   # 탭 미생성 = 데이터 없음
+        records = ws.get_all_records()
+        # SMP/REC 숫자 타입 보장
+        if tab == "smp_rec":
+            for r in records:
+                for k in ("SMP", "REC"):
+                    try:
+                        r[k] = float(r[k])
+                    except (ValueError, TypeError, KeyError):
+                        r[k] = 0.0
+        # attachments: JSON 문자열 → 리스트 복원
+        for r in records:
+            if "attachments" in r and isinstance(r["attachments"], str):
+                try:
+                    r["attachments"] = _json.loads(r["attachments"]) if r["attachments"] else []
+                except Exception:
+                    r["attachments"] = []
+        return records
+    except Exception:
+        return None
+
+
+def _gs_save(tab: str, data: list[dict]) -> None:
+    """Google Sheet 탭에 데이터 전체 덮어쓰기."""
+    gc = _gs_client()
+    sid = _gs_sheet_id()
+    if not gc or not sid:
+        return
+    try:
+        sh = gc.open_by_key(sid)
+        try:
+            ws = sh.worksheet(tab)
+        except Exception:
+            ws = sh.add_worksheet(title=tab, rows=2000, cols=20)
+        if not data:
+            ws.clear()
+            return
+        headers = list(data[0].keys())
+        rows = []
+        for item in data:
+            row = []
+            for h in headers:
+                v = item.get(h, "")
+                if isinstance(v, list):
+                    v = _json.dumps(v, ensure_ascii=False)
+                row.append(v if v is not None else "")
+            rows.append(row)
+        ws.clear()
+        ws.update([headers] + rows)
+    except Exception:
+        pass  # Google Sheets 저장 실패 → 무시 (JSON은 이미 저장됨)
+
+
 def _load_press_releases() -> list[dict]:
-    """data/press_releases.json 에서 보도자료 캐시를 로드합니다."""
+    """보도자료 로드: Google Sheets 우선 → JSON 폴백."""
+    gs = _gs_load("press_releases")
+    if gs is not None:
+        return gs
     if _PRESS_FILE.exists():
         try:
             return _json.loads(_PRESS_FILE.read_text(encoding="utf-8"))
         except Exception:
-            return []
+            pass
     return []
 
 
 def _save_press_releases(articles: list[dict]) -> None:
-    """보도자료를 data/press_releases.json 에 저장합니다.
-    로컬 실행 시 자동 호출 → GitHub 푸시 → Cloud가 이 파일을 읽어 표시.
-    """
+    """보도자료 저장: JSON + Google Sheets 동시 저장."""
     _PRESS_FILE.write_text(_json.dumps(articles, ensure_ascii=False, indent=2), encoding="utf-8")
+    _gs_save("press_releases", articles)
 
 
 def _load_notices() -> list[dict]:
-    """data/notices.json 에서 공지사항 목록을 로드합니다."""
+    """공지사항 로드: Google Sheets 우선 → JSON 폴백."""
+    gs = _gs_load("notices")
+    if gs is not None:
+        return gs
     if _NOTICES_FILE.exists():
         try:
             return _json.loads(_NOTICES_FILE.read_text(encoding="utf-8"))
         except Exception:
-            return []
+            pass
     return []
 
 
 def _save_notices(notices: list[dict]) -> None:
-    """공지사항 목록을 data/notices.json 에 저장합니다."""
+    """공지사항 저장: JSON + Google Sheets 동시 저장."""
     _NOTICES_FILE.write_text(_json.dumps(notices, ensure_ascii=False, indent=2), encoding="utf-8")
+    _gs_save("notices", notices)
 
 
 def _load_smp_rec() -> list[dict]:
-    """data/smp_rec.json 에서 SMP/REC 기록을 로드합니다."""
+    """SMP/REC 로드: Google Sheets 우선 → JSON 폴백."""
+    gs = _gs_load("smp_rec")
+    if gs is not None:
+        return gs
     if _SMP_REC_FILE.exists():
         try:
             return _json.loads(_SMP_REC_FILE.read_text(encoding="utf-8"))
         except Exception:
-            return []
+            pass
     return []
 
 
 def _save_smp_rec(records: list[dict]) -> None:
-    """SMP/REC 기록을 data/smp_rec.json 에 저장합니다."""
+    """SMP/REC 저장: JSON + Google Sheets 동시 저장."""
     _SMP_REC_FILE.write_text(_json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    _gs_save("smp_rec", records)
 
 
 # ─────────────────────────────────────────────
