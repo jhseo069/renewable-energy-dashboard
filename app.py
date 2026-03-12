@@ -1488,6 +1488,21 @@ with tab3:
     with col_rss:
         st.markdown('<p class="section-title">📢 유관 부처 보도자료 (RSS)</p>', unsafe_allow_html=True)
 
+        # ── 임시 RSS 연결 진단 (오류 원인 파악용) ─────────────────────────
+        with st.expander("🔍 RSS 연결 진단 (오류 확인용)", expanded=False):
+            if st.button("진단 실행", key="rss_diag"):
+                import traceback, requests as _req
+                for _src_name, _src_url in [
+                    ("산업부", "https://www.korea.kr/rss/dept_motir.xml"),
+                    ("기후부", "https://www.korea.kr/rss/dept_mcee.xml"),
+                    ("해수부", "https://www.korea.kr/rss/dept_mof.xml"),
+                ]:
+                    try:
+                        _r = _req.get(_src_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                        st.success(f"[{_src_name}] HTTP {_r.status_code} / 크기: {len(_r.content)} bytes")
+                    except Exception as _e:
+                        st.error(f"[{_src_name}] 오류: {traceback.format_exc()}")
+
         if rss_articles:
             
             # 부처별로 그룹핑해서 Expander로 표시
