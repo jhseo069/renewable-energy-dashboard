@@ -7,3 +7,4 @@ python-dotenv>=1.0.0
 feedparser>=6.0.0
 pandas>=2.0.0
 matplotlib>=3.7.0
+curl-cffi>=0.7.0

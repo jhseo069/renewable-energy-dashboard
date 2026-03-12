@@ -22,6 +22,14 @@ RSS 출처: 대한민국 정책브리핑 부처별 RSS (korea.kr)
 import feedparser
 import requests
 from bs4 import BeautifulSoup
+
+# curl_cffi: Chrome TLS 핑거프린트로 위장하여 JA3 차단 우회
+# korea.kr은 Python 기본 TLS 핑거프린트를 차단(ConnectionResetError 104)하므로 필요
+try:
+    from curl_cffi import requests as cffi_requests
+    _CURL_CFFI_AVAILABLE = True
+except ImportError:
+    _CURL_CFFI_AVAILABLE = False
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from email.utils import parsedate_to_datetime
@@ -91,6 +99,7 @@ _HTTP_HEADERS = {
         "Chrome/120.0.0.0 Safari/537.36"
     )
 }
+
 
 # ── 첨부파일 수집 설정 ────────────────────────────────────────────────
 # 병렬 요청 최대 스레드 수 — 너무 많으면 서버 부하, 너무 적으면 느림
@@ -289,23 +298,24 @@ def fetch_rss_articles(
 
     for source in RSS_SOURCES:
         try:
-            # korea.kr은 Streamlit Cloud(해외 IP)에서 SSL 핸드셰이크를 간헐적으로 차단함
-            # (ConnectionResetError 104 — 서버가 TLS 세션 강제 종료)
-            # → 최대 3회 재시도 + 2초 대기로 간헐적 차단 우회
-            import time as _time
-            feed = None
-            for _attempt in range(3):
+            # korea.kr은 Python 기본 TLS 핑거프린트(JA3)를 차단 → ConnectionResetError 104
+            # curl_cffi로 Chrome TLS 핑거프린트 위장 시도, 실패 시 기본 requests 폴백
+            if _CURL_CFFI_AVAILABLE:
                 try:
+                    _resp = cffi_requests.get(
+                        source["url"], headers=_HTTP_HEADERS,
+                        impersonate="chrome120", timeout=15,
+                    )
+                    feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
+                except Exception as _cffi_err:
+                    print(f"[{source['short']}] curl_cffi 실패({_cffi_err}), requests 폴백")
                     _resp = requests.get(source["url"], headers=_HTTP_HEADERS, timeout=15)
                     _resp.raise_for_status()
                     feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
-                    break  # 성공 시 즉시 루프 종료
-                except Exception as _req_err:
-                    print(f"[{source['short']}] 시도 {_attempt+1}/3 실패: {_req_err}")
-                    if _attempt < 2:
-                        _time.sleep(2)  # 2초 대기 후 재시도
-            if feed is None:
-                raise ValueError(f"[{source['short']}] 3회 재시도 후 RSS 수집 실패")
+            else:
+                _resp = requests.get(source["url"], headers=_HTTP_HEADERS, timeout=15)
+                _resp.raise_for_status()
+                feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
 
             if not feed.entries:
                 raise ValueError(f"RSS entries 없음 (status={feed.get('status', '?')})")
