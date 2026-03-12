@@ -22,6 +22,7 @@ RSS 출처: 대한민국 정책브리핑 부처별 RSS (korea.kr)
 
 import feedparser
 import requests
+import time
 from bs4 import BeautifulSoup
 
 # curl_cffi: Chrome TLS 핑거프린트로 위장하여 JA3 차단 우회
@@ -315,7 +316,11 @@ def fetch_rss_articles(
     """
     collected_articles: list[dict] = []
 
-    for source in RSS_SOURCES:
+    for _src_idx, source in enumerate(RSS_SOURCES):
+        # 부처 간 요청 간격 1초 — korea.kr rate limit 방지 (연속 요청 시 403 반환 확인)
+        if _src_idx > 0:
+            time.sleep(1)
+
         try:
             # korea.kr은 Python 기본 TLS 핑거프린트(JA3)를 차단 → ConnectionResetError 104
             # curl_cffi로 Chrome TLS 핑거프린트 위장 시도, 실패 시 기본 requests 폴백
@@ -325,6 +330,9 @@ def fetch_rss_articles(
                         source["url"], headers=_HTTP_HEADERS,
                         impersonate="chrome120", timeout=15,
                     )
+                    # HTTP 오류 코드(403, 429 등) 확인 — 오류 HTML 페이지를 RSS로 오해석 방지
+                    if _resp.status_code != 200:
+                        raise ValueError(f"HTTP {_resp.status_code}")
                     feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
                 except Exception as _cffi_err:
                     print(f"[{source['short']}] curl_cffi 실패({_cffi_err}), requests 폴백")
