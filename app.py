@@ -93,10 +93,24 @@ def _fetch_all_keyword_news(keywords: tuple) -> dict:
 # ── 정책/입법 동향 캐시 함수 ──────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_policy_rss() -> list[dict]:
-    """부처 보도자료 RSS 수집 (1시간 캐시). 실패 시 Dummy 반환.
-    첨부파일 수집은 별도 캐시 함수에서 처리 — RSS 기사 수집과 분리해 Cloud 타임아웃 방지.
+    """부처 보도자료 수집 (1시간 캐시).
+
+    하이브리드 전략:
+    - RSS 성공(로컬) → 실제 기사 반환 + press_releases.json 자동 저장
+    - RSS 실패(Cloud) → press_releases.json 폴백 (마지막 로컬 저장본)
+    - 어떤 경우에도 Dummy 기사는 반환하지 않음
     """
-    return fetch_rss_articles(filter_energy=True, fetch_attachments=False)
+    articles = fetch_rss_articles(filter_energy=True, fetch_attachments=False)
+    real_articles = [a for a in articles if not a.get("is_dummy")]
+    if real_articles:
+        # RSS 성공 → JSON 저장 (로컬에서만 실제 저장; Cloud는 ephemeral 파일시스템)
+        try:
+            _save_press_releases(real_articles)
+        except Exception:
+            pass
+        return real_articles
+    # RSS 전부 실패 → 마지막 로컬 저장본 폴백
+    return _load_press_releases()
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -409,6 +423,7 @@ import json as _json
 _NOTICES_FILE    = Path(__file__).parent / "data" / "notices.json"
 _ATTACHMENTS_DIR = Path(__file__).parent / "data" / "attachments"
 _SMP_REC_FILE    = Path(__file__).parent / "data" / "smp_rec.json"
+_PRESS_FILE      = Path(__file__).parent / "data" / "press_releases.json"
 Path(__file__).parent.joinpath("data").mkdir(parents=True, exist_ok=True)
 _ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -420,6 +435,23 @@ _T4_ORG_DISPLAY = {
     "shinan":  "신안군청",
     "jeonnam": "전남도청",
 }
+
+
+def _load_press_releases() -> list[dict]:
+    """data/press_releases.json 에서 보도자료 캐시를 로드합니다."""
+    if _PRESS_FILE.exists():
+        try:
+            return _json.loads(_PRESS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
+
+
+def _save_press_releases(articles: list[dict]) -> None:
+    """보도자료를 data/press_releases.json 에 저장합니다.
+    로컬 실행 시 자동 호출 → GitHub 푸시 → Cloud가 이 파일을 읽어 표시.
+    """
+    _PRESS_FILE.write_text(_json.dumps(articles, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _load_notices() -> list[dict]:
@@ -1415,8 +1447,9 @@ with tab3:
     st.markdown("### 🏛️ 정책 및 입법 동향")
     st.markdown(
         "<p style='color:#8892b0;'>"
-        "유관 부처 보도자료(RSS)와 국회 법안(오픈 API)을 자동 수집합니다. "
-        "국회 API 키 미설정 시 Mock 데이터가 표시됩니다."
+        "유관 부처 보도자료는 <b>로컬 실행 시 자동 수집·저장</b>됩니다. "
+        "클라우드에서는 마지막 로컬 저장본을 표시합니다. "
+        "국회 법안은 API로 직접 수집됩니다."
         "</p>",
         unsafe_allow_html=True,
     )
@@ -1439,7 +1472,7 @@ with tab3:
     with col_pol_info:
         st.markdown(
             "<p style='color:#8892b0; font-size:0.82rem; margin-top:0.5rem;'>"
-            "RSS 1시간 캐시 · 법안 6시간 캐시 · "
+            "보도자료: 로컬 자동저장 → Cloud 표시 · 법안 6시간 캐시 · "
             "<code>ASSEMBLY_API_KEY</code> 설정 시 실서버 전환</p>",
             unsafe_allow_html=True,
         )
@@ -1460,7 +1493,7 @@ with tab3:
         "제목": a.get("title", ""),
         "요약": a.get("summary", ""),
         "링크": a.get("link", ""),
-    } for a in rss_articles if not a.get("is_dummy")]
+    } for a in rss_articles]  # _fetch_policy_rss는 더미 없음
     bill_rows = [{
         "구분": "국회법안",
         "날짜": b.get("propose_date", ""),
@@ -1484,12 +1517,20 @@ with tab3:
     # ── 두 섹션 나란히 배치 ────────────────────────────────────────────
     col_rss, col_law = st.columns(2)
 
-    # ── 왼쪽: 부처 보도자료 RSS ────────────────────────────────────────
+    # ── 왼쪽: 부처 보도자료 (하이브리드: 로컬 RSS 자동저장 / Cloud JSON 폴백)
     with col_rss:
-        st.markdown('<p class="section-title">📢 유관 부처 보도자료 (RSS)</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-title">📢 유관 부처 보도자료</p>', unsafe_allow_html=True)
+
+        # 데이터 출처 안내 (로컬 vs 클라우드 구분)
+        _press_file_exists = _PRESS_FILE.exists()
+        if _press_file_exists:
+            _press_mtime = datetime.fromtimestamp(_PRESS_FILE.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            st.markdown(
+                f"<p style='color:#8892b0; font-size:0.78rem;'>📂 저장본 기준 (최종 업데이트: {_press_mtime} KST)</p>",
+                unsafe_allow_html=True,
+            )
 
         if rss_articles:
-            
             # 부처별로 그룹핑해서 Expander로 표시
             dept_groups: dict[str, list] = {}
             for article in rss_articles:
@@ -1506,8 +1547,6 @@ with tab3:
 
             for dept, articles in dept_groups.items():
                 icon = dept_icons.get(dept, "🏛️")
-                has_dummy = any(a["is_dummy"] for a in articles)
-                dummy_badge = " <span style='color:#ffc837; font-size:0.75rem;'>[연결 준비 중]</span>" if has_dummy else ""
 
                 with st.expander(f"{icon} {dept}  ({len(articles)}건)", expanded=True):
                     # ── Gemini AI 동향 분석 버튼 ──────────────────────
@@ -1519,7 +1558,7 @@ with tab3:
                             news_for_ai = [
                                 {"title": a["title"], "summary": a["summary"],
                                  "source": a["source"], "date": a["date"]}
-                                for a in articles if not a.get("is_dummy")
+                                for a in articles
                             ]
                             if news_for_ai:
                                 with st.spinner(f"Gemini AI 분석 중 — {dept} 보도자료…"):
@@ -1539,46 +1578,39 @@ with tab3:
 
                     with st.container(height=400):
                         for article in articles:
-                            if article["is_dummy"]:
-                                html_str = (
-                                    f'<div class="coming-card" style="margin-bottom:0.5rem;">'
-                                    f'<p class="meta" style="color:#ffc837;">🔧 {article["source"]} · {article["date"]}</p>'
-                                    f'<h4 style="color:#ffc837; font-size:0.9rem;">{article["title"]}</h4>'
-                                    f'<p>{article["summary"]}</p>'
-                                    f'</div>'
+                            # 첨부파일: 개별 캐시 함수로 분리 호출 (RSS 수집과 독립)
+                            attachments = _fetch_attachments_cached(article["link"])
+                            att_html = ""
+                            if attachments:
+                                att_links = "".join(
+                                    f'<a href="{att["url"]}" target="_blank" '
+                                    f'style="display:inline-block; margin:0.3rem 0.4rem 0 0; padding:0.25rem 0.6rem; '
+                                    f'background:rgba(100,255,218,0.1); border:1px solid rgba(100,255,218,0.25); '
+                                    f'border-radius:6px; color:#64ffda; font-size:0.75rem; text-decoration:none; '
+                                    f'transition:all 0.2s ease;">'
+                                    f'📎 {att["name"][:40]}</a>'
+                                    for att in attachments
                                 )
-                                st.markdown(html_str, unsafe_allow_html=True)
-                            else:
-                                # 첨부파일: 개별 캐시 함수로 분리 호출 (RSS 수집과 독립)
-                                attachments = _fetch_attachments_cached(article["link"])
-                                att_html = ""
-                                if attachments:
-                                    att_links = "".join(
-                                        f'<a href="{att["url"]}" target="_blank" '
-                                        f'style="display:inline-block; margin:0.3rem 0.4rem 0 0; padding:0.25rem 0.6rem; '
-                                        f'background:rgba(100,255,218,0.1); border:1px solid rgba(100,255,218,0.25); '
-                                        f'border-radius:6px; color:#64ffda; font-size:0.75rem; text-decoration:none; '
-                                        f'transition:all 0.2s ease;">'
-                                        f'📎 {att["name"][:40]}</a>'
-                                        for att in attachments
-                                    )
-                                    att_html = (
-                                        f'<div style="margin-top:0.8rem; padding-top:0.6rem; border-top:1px dashed rgba(255,255,255,0.1);">'
-                                        f'<span style="font-size:0.75rem; color:#8892b0; display:block;">⬇️ 첨부파일 다운로드</span>'
-                                        f'{att_links}</div>'
-                                    )
-
-                                html_str = (
-                                    f'<div class="card" style="margin-bottom:0.5rem;">'
-                                    f'<p class="meta">🏢 {article["source"]} · {article["date"]}</p>'
-                                    f'<h4 style="font-size:0.92rem;"><a href="{article["link"]}" target="_blank" style="color:#ccd6f6; text-decoration:none;">{article["title"]}</a></h4>'
-                                    f'<p>{article["summary"][:120]}…</p>'
-                                    f'{att_html}'
-                                    f'</div>'
+                                att_html = (
+                                    f'<div style="margin-top:0.8rem; padding-top:0.6rem; border-top:1px dashed rgba(255,255,255,0.1);">'
+                                    f'<span style="font-size:0.75rem; color:#8892b0; display:block;">⬇️ 첨부파일 다운로드</span>'
+                                    f'{att_links}</div>'
                                 )
-                                st.markdown(html_str, unsafe_allow_html=True)
+                            html_str = (
+                                f'<div class="card" style="margin-bottom:0.5rem;">'
+                                f'<p class="meta">🏢 {article["source"]} · {article["date"]}</p>'
+                                f'<h4 style="font-size:0.92rem;"><a href="{article["link"]}" target="_blank" style="color:#ccd6f6; text-decoration:none;">{article["title"]}</a></h4>'
+                                f'<p>{article["summary"][:120]}…</p>'
+                                f'{att_html}'
+                                f'</div>'
+                            )
+                            st.markdown(html_str, unsafe_allow_html=True)
         else:
-            st.info("수집된 보도자료가 없습니다.")
+            st.info(
+                "📂 저장된 보도자료가 없습니다.\n\n"
+                "**로컬에서 실행** 후 🔄 갱신 버튼을 클릭하면 RSS를 자동 수집·저장합니다.\n"
+                "이후 GitHub에 push하면 클라우드에서도 표시됩니다."
+            )
 
     # ── 오른쪽: 국회 법안 ─────────────────────────────────────────────
     with col_law:
