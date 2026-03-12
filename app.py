@@ -430,19 +430,16 @@ _T4_ORG_DISPLAY = {
 # ──────────────────────────────────────────────────────────────────────
 
 def _gs_client():
-    """gspread 클라이언트 반환 (설정 없거나 오류 시 None)."""
+    """gspread 클라이언트 반환 (설정 없거나 오류 시 None).
+    gspread.service_account_from_dict() 사용 — 5.x/6.x 모두 호환.
+    """
     try:
         import gspread
-        from google.oauth2.service_account import Credentials as _GCreds
-        _scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ]
-        if "gcp_service_account" in st.secrets:
-            _creds = _GCreds.from_service_account_info(
-                dict(st.secrets["gcp_service_account"]), scopes=_scopes
-            )
-            return gspread.authorize(_creds)
+        if "gcp_service_account" not in st.secrets:
+            return None
+        # Streamlit AttrDict → 일반 dict 로 변환
+        creds_dict = {k: v for k, v in st.secrets["gcp_service_account"].items()}
+        return gspread.service_account_from_dict(creds_dict)
     except Exception:
         pass
     return None
