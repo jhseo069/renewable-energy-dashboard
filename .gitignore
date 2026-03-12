@@ -2,8 +2,7 @@
 .env
 
 # 수집 데이터 및 아카이브 (용량 및 보안)
-data/*
-!data/press_releases.json
+data/
 news_archive/
 
 # 로그

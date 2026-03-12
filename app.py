@@ -91,25 +91,11 @@ def _fetch_all_keyword_news(keywords: tuple) -> dict:
     return result
 
 # ── 정책/입법 동향 캐시 함수 ──────────────────────────────────────────
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _fetch_policy_rss() -> list[dict]:
-    """부처 보도자료 수집 (1시간 캐시).
-
-    하이브리드 전략:
-    - RSS 성공(로컬) → 실제 기사 반환 + press_releases.json 자동 저장
-    - RSS 실패(Cloud) → press_releases.json 폴백 (마지막 로컬 저장본)
-    - 어떤 경우에도 Dummy 기사는 반환하지 않음
+    """수동 등록된 부처 보도자료를 반환합니다 (사이드바/뉴스레터용 5분 캐시).
+    Tab 3 메인 디스플레이는 _load_press_releases() 직접 호출 (캐시 없이 즉시 반영).
     """
-    articles = fetch_rss_articles(filter_energy=True, fetch_attachments=False)
-    real_articles = [a for a in articles if not a.get("is_dummy")]
-    if real_articles:
-        # RSS 성공 → JSON 저장 (로컬에서만 실제 저장; Cloud는 ephemeral 파일시스템)
-        try:
-            _save_press_releases(real_articles)
-        except Exception:
-            pass
-        return real_articles
-    # RSS 전부 실패 → 마지막 로컬 저장본 폴백
     return _load_press_releases()
 
 
@@ -1447,8 +1433,8 @@ with tab3:
     st.markdown("### 🏛️ 정책 및 입법 동향")
     st.markdown(
         "<p style='color:#8892b0;'>"
-        "유관 부처 보도자료는 <b>로컬 실행 시 자동 수집·저장</b>됩니다. "
-        "클라우드에서는 마지막 로컬 저장본을 표시합니다. "
+        "유관 부처 보도자료는 <b>브라우저에서 직접 추가·관리</b>합니다. "
+        "등록한 내용은 서버에 영구 저장되며 클라우드에서 즉시 반영됩니다. "
         "국회 법안은 API로 직접 수집됩니다."
         "</p>",
         unsafe_allow_html=True,
@@ -1472,14 +1458,15 @@ with tab3:
     with col_pol_info:
         st.markdown(
             "<p style='color:#8892b0; font-size:0.82rem; margin-top:0.5rem;'>"
-            "보도자료: 로컬 자동저장 → Cloud 표시 · 법안 6시간 캐시 · "
+            "보도자료: 브라우저 수동 등록 (서버 영구저장) · 법안 6시간 캐시 · "
             "<code>ASSEMBLY_API_KEY</code> 설정 시 실서버 전환</p>",
             unsafe_allow_html=True,
         )
 
     # ── 데이터 사전 수집 (통합 CSV용) ─────────────────────────────────
+    # 보도자료: 캐시 없이 직접 로드 (추가/삭제 즉시 반영)
     with st.spinner("데이터 수집 중…"):
-        raw_rss_articles = _fetch_policy_rss()
+        raw_rss_articles = _load_press_releases()
         rss_articles     = _filter_by_period(raw_rss_articles, policy_period, date_key="date")
         raw_bills        = _fetch_assembly_bills()
         bills            = _filter_by_period(raw_bills, policy_period, date_key="propose_date")
@@ -1517,18 +1504,77 @@ with tab3:
     # ── 두 섹션 나란히 배치 ────────────────────────────────────────────
     col_rss, col_law = st.columns(2)
 
-    # ── 왼쪽: 부처 보도자료 (하이브리드: 로컬 RSS 자동저장 / Cloud JSON 폴백)
+    # ── 왼쪽: 부처 보도자료 (수동 등록 — Tab 4 방식)
     with col_rss:
         st.markdown('<p class="section-title">📢 유관 부처 보도자료</p>', unsafe_allow_html=True)
 
-        # 데이터 출처 안내 (로컬 vs 클라우드 구분)
-        _press_file_exists = _PRESS_FILE.exists()
-        if _press_file_exists:
-            _press_mtime = datetime.fromtimestamp(_PRESS_FILE.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+        # ── 보도자료 추가 폼 ─────────────────────────────────────────────
+        with st.expander("➕ 보도자료 추가하기", expanded=False):
             st.markdown(
-                f"<p style='color:#8892b0; font-size:0.78rem;'>📂 저장본 기준 (최종 업데이트: {_press_mtime} KST)</p>",
+                "<p style='color:#8892b0; font-size:0.85rem;'>"
+                "부처 홈페이지에서 확인한 보도자료를 아래 폼에 입력하세요. "
+                "입력한 내용은 서버에 영구 저장됩니다.</p>",
                 unsafe_allow_html=True,
             )
+            pr_col1, pr_col2 = st.columns(2)
+            with pr_col1:
+                pr_dept = st.selectbox(
+                    "부처 선택",
+                    options=["산업부", "기후부", "해수부", "농림부", "국토부"],
+                    key="pr_form_dept",
+                )
+                pr_category = st.selectbox(
+                    "카테고리",
+                    options=["보도자료", "정책안내", "규제개정", "기타"],
+                    key="pr_form_category",
+                )
+                pr_date = st.date_input("날짜", value=get_kst_now().date(), key="pr_form_date")
+            with pr_col2:
+                pr_title = st.text_input(
+                    "제목 *",
+                    placeholder="보도자료 제목을 입력하세요",
+                    key="pr_form_title",
+                )
+                pr_link = st.text_input(
+                    "원문 링크 URL (없으면 빈칸)",
+                    placeholder="https://",
+                    key="pr_form_link",
+                )
+                pr_summary = st.text_area(
+                    "요약 (선택)",
+                    placeholder="주요 내용을 간략히 입력하세요",
+                    key="pr_form_summary",
+                    height=100,
+                )
+
+            if st.button("✅ 추가", key="pr_form_submit", use_container_width=False):
+                if not pr_title.strip():
+                    st.error("제목을 입력해 주세요.")
+                else:
+                    pr_added_at = get_kst_now().strftime("%Y-%m-%dT%H:%M:%S")
+                    new_press = {
+                        "source":   pr_dept,
+                        "category": pr_category,
+                        "title":    pr_title.strip(),
+                        "date":     pr_date.strftime("%Y-%m-%d"),
+                        "link":     pr_link.strip(),
+                        "summary":  pr_summary.strip(),
+                        "added_at": pr_added_at,
+                    }
+                    all_press = _load_press_releases()
+                    all_press.insert(0, new_press)   # 최신 순 맨 앞에 삽입
+                    _save_press_releases(all_press)
+                    st.cache_data.clear()
+                    st.success(f"✅ 보도자료가 등록되었습니다: {pr_title.strip()}")
+                    st.rerun()
+
+        dept_icons = {
+            "산업부": "⚡",
+            "기후부": "🌿",
+            "해수부": "🌊",
+            "농림부": "🌾",
+            "국토부": "🏗️",
+        }
 
         if rss_articles:
             # 부처별로 그룹핑해서 Expander로 표시
@@ -1536,14 +1582,6 @@ with tab3:
             for article in rss_articles:
                 dept = article["source"]
                 dept_groups.setdefault(dept, []).append(article)
-
-            dept_icons = {
-                "산업부": "⚡",   # 산업통상부 (구 산업통상자원부)
-                "기후부": "🌿",   # 기후에너지환경부
-                "해수부": "🌊",   # 해양수산부
-                "농림부": "🌾",   # 농림축산식품부
-                "국토부": "🏗️",   # 국토교통부
-            }
 
             for dept, articles in dept_groups.items():
                 icon = dept_icons.get(dept, "🏛️")
@@ -1578,38 +1616,47 @@ with tab3:
 
                     with st.container(height=400):
                         for article in articles:
-                            # 첨부파일: 개별 캐시 함수로 분리 호출 (RSS 수집과 독립)
-                            attachments = _fetch_attachments_cached(article["link"])
-                            att_html = ""
-                            if attachments:
-                                att_links = "".join(
-                                    f'<a href="{att["url"]}" target="_blank" '
-                                    f'style="display:inline-block; margin:0.3rem 0.4rem 0 0; padding:0.25rem 0.6rem; '
-                                    f'background:rgba(100,255,218,0.1); border:1px solid rgba(100,255,218,0.25); '
-                                    f'border-radius:6px; color:#64ffda; font-size:0.75rem; text-decoration:none; '
-                                    f'transition:all 0.2s ease;">'
-                                    f'📎 {att["name"][:40]}</a>'
-                                    for att in attachments
+                            c_card, c_del = st.columns([9, 1])
+                            with c_card:
+                                cat_badge = (
+                                    f' · <span style="font-size:0.72rem; padding:0.1rem 0.4rem; '
+                                    f'background:rgba(100,255,218,0.1); border-radius:4px;">'
+                                    f'{article["category"]}</span>'
+                                    if article.get("category") else ""
                                 )
-                                att_html = (
-                                    f'<div style="margin-top:0.8rem; padding-top:0.6rem; border-top:1px dashed rgba(255,255,255,0.1);">'
-                                    f'<span style="font-size:0.75rem; color:#8892b0; display:block;">⬇️ 첨부파일 다운로드</span>'
-                                    f'{att_links}</div>'
+                                summary_text = article.get("summary", "")
+                                summary_html = (
+                                    f'<p>{summary_text[:150]}{"…" if len(summary_text) > 150 else ""}</p>'
+                                    if summary_text else ""
                                 )
-                            html_str = (
-                                f'<div class="card" style="margin-bottom:0.5rem;">'
-                                f'<p class="meta">🏢 {article["source"]} · {article["date"]}</p>'
-                                f'<h4 style="font-size:0.92rem;"><a href="{article["link"]}" target="_blank" style="color:#ccd6f6; text-decoration:none;">{article["title"]}</a></h4>'
-                                f'<p>{article["summary"][:120]}…</p>'
-                                f'{att_html}'
-                                f'</div>'
-                            )
-                            st.markdown(html_str, unsafe_allow_html=True)
+                                link_href = article.get("link", "").strip()
+                                title_html = (
+                                    f'<a href="{link_href}" target="_blank" style="color:#ccd6f6; text-decoration:none;">{article["title"]}</a>'
+                                    if link_href else f'<span style="color:#ccd6f6;">{article["title"]}</span>'
+                                )
+                                html_str = (
+                                    f'<div class="card" style="margin-bottom:0.5rem;">'
+                                    f'<p class="meta">🏢 {article["source"]} · {article["date"]}{cat_badge}</p>'
+                                    f'<h4 style="font-size:0.92rem;">{title_html}</h4>'
+                                    f'{summary_html}'
+                                    f'</div>'
+                                )
+                                st.markdown(html_str, unsafe_allow_html=True)
+                            with c_del:
+                                del_key = f"del_pr_{article.get('added_at', '')}"
+                                if st.button("🗑️", key=del_key, help="이 보도자료 삭제"):
+                                    all_press = _load_press_releases()
+                                    all_press = [
+                                        p for p in all_press
+                                        if p.get("added_at") != article.get("added_at")
+                                    ]
+                                    _save_press_releases(all_press)
+                                    st.cache_data.clear()
+                                    st.rerun()
         else:
             st.info(
-                "📂 저장된 보도자료가 없습니다.\n\n"
-                "**로컬에서 실행** 후 🔄 갱신 버튼을 클릭하면 RSS를 자동 수집·저장합니다.\n"
-                "이후 GitHub에 push하면 클라우드에서도 표시됩니다."
+                "📂 등록된 보도자료가 없습니다.\n\n"
+                "위 **'➕ 보도자료 추가하기'** 를 클릭하여 직접 입력하세요."
             )
 
     # ── 오른쪽: 국회 법안 ─────────────────────────────────────────────
