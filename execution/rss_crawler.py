@@ -289,16 +289,23 @@ def fetch_rss_articles(
 
     for source in RSS_SOURCES:
         try:
-            # korea.kr RSS는 HTTP Content-Type에 charset 미지정 → feedparser가 ISO-8859-1로
-            # 잘못 해석해 한글이 깨짐 → requests로 bytes 수신 후 UTF-8 강제 디코딩 시도
-            # requests 실패(Cloud 네트워크 차단 등) 시 feedparser 직접 URL 파싱으로 폴백
-            try:
-                _resp = requests.get(source["url"], headers=_HTTP_HEADERS, timeout=15)
-                _resp.raise_for_status()
-                feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
-            except Exception as _req_err:
-                print(f"[{source['short']}] requests 실패({_req_err}), feedparser 직접 파싱 폴백")
-                feed = feedparser.parse(source["url"])
+            # korea.kr은 Streamlit Cloud(해외 IP)에서 SSL 핸드셰이크를 간헐적으로 차단함
+            # (ConnectionResetError 104 — 서버가 TLS 세션 강제 종료)
+            # → 최대 3회 재시도 + 2초 대기로 간헐적 차단 우회
+            import time as _time
+            feed = None
+            for _attempt in range(3):
+                try:
+                    _resp = requests.get(source["url"], headers=_HTTP_HEADERS, timeout=15)
+                    _resp.raise_for_status()
+                    feed = feedparser.parse(_resp.content.decode("utf-8", errors="replace"))
+                    break  # 성공 시 즉시 루프 종료
+                except Exception as _req_err:
+                    print(f"[{source['short']}] 시도 {_attempt+1}/3 실패: {_req_err}")
+                    if _attempt < 2:
+                        _time.sleep(2)  # 2초 대기 후 재시도
+            if feed is None:
+                raise ValueError(f"[{source['short']}] 3회 재시도 후 RSS 수집 실패")
 
             if not feed.entries:
                 raise ValueError(f"RSS entries 없음 (status={feed.get('status', '?')})")
