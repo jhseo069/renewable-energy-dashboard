@@ -674,14 +674,16 @@ def _generate_newsletter_html(
     )
 
     # SMP/REC 가격 비교 (최신 2개 항목)
+    # 날짜 내림차순 정렬 보장 — Google Sheets 로드 시 순서가 다를 수 있음
+    smp_records = sorted(smp_records, key=lambda x: x.get("date", ""), reverse=True)
     curr = smp_records[0] if len(smp_records) >= 1 else {"date": "—", "SMP": 0.0, "REC": 0.0}
     prev = smp_records[1] if len(smp_records) >= 2 else curr
     smp_diff  = curr["SMP"] - prev["SMP"]
     rec_diff  = curr["REC"] - prev["REC"]
-    smp_arrow = "▼" if smp_diff < 0 else "▲"
-    rec_arrow = "▼" if rec_diff < 0 else "▲"
-    smp_col   = "#c0392b" if smp_diff < 0 else "#27ae60"
-    rec_col   = "#c0392b" if rec_diff < 0 else "#27ae60"
+    smp_arrow = "▼" if smp_diff < 0 else ("→" if smp_diff == 0 else "▲")
+    rec_arrow = "▼" if rec_diff < 0 else ("→" if rec_diff == 0 else "▲")
+    smp_col   = "#c0392b" if smp_diff < 0 else ("#888888" if smp_diff == 0 else "#27ae60")
+    rec_col   = "#c0392b" if rec_diff < 0 else ("#888888" if rec_diff == 0 else "#27ae60")
 
     def _news_ul(items: list, limit: int = 6) -> str:
         return "".join(
@@ -1015,7 +1017,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         "<p style='color:#8892b0; font-size:0.8rem;'>"
-        "신재생에너지 사업개발팀<br>사내 대시보드 v0.8.0</p>",
+        "신재생에너지 사업개발팀<br>사내 대시보드 v0.8.5</p>",
         unsafe_allow_html=True,
     )
 

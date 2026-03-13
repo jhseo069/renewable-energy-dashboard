@@ -22,7 +22,7 @@
 - **앱**: 신재생에너지 사업개발팀 사내 대시보드 (Streamlit)
 - **배포**: Streamlit Cloud (https://renewable-energy-dashboard-nsmgneobdtz3xqpddasevz.streamlit.app/)
 - **언어**: 항상 한국어로 소통, 코드 주석도 한국어
-- **현재 버전**: v0.8.4
+- **현재 버전**: v0.8.5
 
 ---
 
