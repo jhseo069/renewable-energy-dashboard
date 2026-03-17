@@ -1653,13 +1653,31 @@ with tab3:
     # ── 데이터 사전 수집 (통합 CSV용) ─────────────────────────────────
     # 보도자료: 캐시 없이 직접 로드 (추가/삭제 즉시 반영)
     with st.spinner("데이터 수집 중…"):
-        raw_rss_articles = _load_press_releases()
-        rss_articles     = _filter_by_period(raw_rss_articles, policy_period, date_key="date")
-        raw_bills        = _fetch_assembly_bills()
-        bills            = _filter_by_period(raw_bills, policy_period, date_key="propose_date")
+        all_press_articles = _load_press_releases()
+        raw_bills          = _fetch_assembly_bills()
+        bills              = _filter_by_period(raw_bills, policy_period, date_key="propose_date")
+
+    # ── 9:00 AM KST 일별 표시 필터 ────────────────────────────────────
+    # 오전 9:00 이전에 등록된 보도자료는 화면에서 숨깁니다 (Google Sheets에 영구 보존).
+    _p_now  = get_kst_now()
+    _p_900  = datetime.combine(_p_now.date(), dtime(9, 0))
+    _p_display_cutoff = _p_900 if _p_now >= _p_900 else _p_900 - timedelta(days=1)
+    _p_cutoff_str     = _p_display_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
+    display_press     = [a for a in all_press_articles if a.get("added_at", "") >= _p_cutoff_str]
+    press_hidden_count = len(all_press_articles) - len(display_press)
+
+    # 화면 표시: 9:00 필터 적용 후 기간 필터
+    rss_articles = _filter_by_period(display_press, policy_period, date_key="date")
+
+    if press_hidden_count > 0:
+        st.info(
+            f"📦 오전 9:00 이전 보도자료 **{press_hidden_count}건**은 보관 처리되어 숨겨졌습니다. "
+            f"(Google Sheets에 영구 저장됨)"
+        )
 
     # ── 통합 CSV 다운로드 버튼 (Tab 2와 동일한 방식 — 상단 1개) ──────
     today_str = get_kst_now().strftime("%Y-%m-%d")
+    # CSV는 9:00 필터 미적용 — 전체 기간 필터 기준으로 다운로드
     rss_rows = [{
         "구분": "보도자료",
         "날짜": a.get("date", ""),
@@ -1667,7 +1685,7 @@ with tab3:
         "제목": a.get("title", ""),
         "요약": a.get("summary", ""),
         "링크": a.get("link", ""),
-    } for a in rss_articles]  # _fetch_policy_rss는 더미 없음
+    } for a in _filter_by_period(all_press_articles, policy_period, date_key="date")]
     bill_rows = [{
         "구분": "국회법안",
         "날짜": b.get("propose_date", ""),
@@ -2000,20 +2018,20 @@ with tab4:
     # ── 공지사항 데이터 로드 ─────────────────────────────────────────────
     all_notices = _load_notices()
 
-    # ── 9:30 AM 일별 표시 필터 ───────────────────────────────────────────
-    # 오전 9:30 이전에 등록된 공지는 대시보드에서 숨깁니다.
-    # data/notices.json과 data/attachments/에는 영구 보존됩니다.
+    # ── 9:00 AM KST 일별 표시 필터 ──────────────────────────────────────
+    # 오전 9:00 이전에 등록된 공지는 대시보드에서 숨깁니다.
+    # Google Sheets 및 data/notices.json에 영구 보존됩니다.
     _now = get_kst_now()
-    _today_930 = datetime.combine(_now.date(), dtime(9, 30))
-    _display_cutoff = _today_930 if _now >= _today_930 else _today_930 - timedelta(days=1)
+    _today_900 = datetime.combine(_now.date(), dtime(9, 0))
+    _display_cutoff = _today_900 if _now >= _today_900 else _today_900 - timedelta(days=1)
     _cutoff_str     = _display_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
     display_notices = [n for n in all_notices if n.get("added_at", "") >= _cutoff_str]
     archived_count  = len(all_notices) - len(display_notices)
 
     if archived_count > 0:
         st.info(
-            f"📦 오전 9:30 이전 공지 **{archived_count}건**은 보관 처리되어 숨겨졌습니다. "
-            f"(data/notices.json에 영구 저장됨)"
+            f"📦 오전 9:00 이전 공지 **{archived_count}건**은 보관 처리되어 숨겨졌습니다. "
+            f"(Google Sheets에 영구 저장됨)"
         )
 
     # ── 상단 컨트롤: 기관 필터 + 전체 CSV 다운로드 ─────────────────────
