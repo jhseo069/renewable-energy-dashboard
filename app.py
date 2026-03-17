@@ -521,6 +521,61 @@ def _gs_save(tab: str, data: list[dict]) -> None:
         pass  # Google Sheets 저장 실패 → 무시 (JSON은 이미 저장됨)
 
 
+def _gs_archive(source_tab: str, old_items: list[dict]) -> None:
+    """30일 초과 항목을 Google Sheets 'archive' 탭으로 이동 (중복 방지).
+    active 탭에서는 제거되고, archive 탭에 누적 보관됨.
+    """
+    if not old_items:
+        return
+    gc = _gs_client()
+    sid = _gs_sheet_id()
+    if not gc or not sid:
+        return
+    try:
+        sh = gc.open_by_key(sid)
+        try:
+            ws = sh.worksheet("archive")
+        except Exception:
+            ws = sh.add_worksheet(title="archive", rows=5000, cols=25)
+
+        # 기존 아카이브 로드 (added_at 기준 중복 방지)
+        try:
+            existing = ws.get_all_records()
+        except Exception:
+            existing = []
+        existing_keys = {r.get("added_at", "") for r in existing if r.get("added_at")}
+
+        # source_tab / archived_at 메타 추가 후 신규분만 필터
+        now_str = get_kst_now().strftime("%Y-%m-%dT%H:%M:%S")
+        new_items = []
+        for item in old_items:
+            if item.get("added_at", "") not in existing_keys:
+                row = dict(item)
+                row["archived_from"] = source_tab
+                row["archived_at"]   = now_str
+                # attachments 리스트 → JSON 문자열 직렬화
+                if isinstance(row.get("attachments"), list):
+                    row["attachments"] = _json.dumps(row["attachments"], ensure_ascii=False)
+                new_items.append(row)
+
+        if not new_items:
+            return
+
+        all_data = existing + new_items
+        # 헤더: 기존 헤더에 신규 키 병합
+        headers = list(all_data[0].keys())
+        for item in all_data[1:]:
+            for k in item.keys():
+                if k not in headers:
+                    headers.append(k)
+
+        rows = [[item.get(h, "") for h in headers] for item in all_data]
+        ws.clear()
+        ws.update([headers] + rows)
+    except Exception:
+        pass  # 아카이브 실패 → 무시 (active 데이터는 정상 저장됨)
+
+
 def _load_press_releases() -> list[dict]:
     """보도자료 로드: Google Sheets 우선 → JSON 폴백 (탭 없으면 자동 마이그레이션)."""
     gs = _gs_load("press_releases")
@@ -540,9 +595,14 @@ def _load_press_releases() -> list[dict]:
 
 
 def _save_press_releases(articles: list[dict]) -> None:
-    """보도자료 저장: JSON + Google Sheets 동시 저장."""
-    _PRESS_FILE.write_text(_json.dumps(articles, ensure_ascii=False, indent=2), encoding="utf-8")
-    _gs_save("press_releases", articles)
+    """보도자료 저장: 30일 초과 항목은 archive로 이동, 나머지는 JSON + Google Sheets 저장."""
+    cutoff = (get_kst_now() - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
+    old_items    = [a for a in articles if a.get("added_at", "9999") < cutoff]
+    active_items = [a for a in articles if a.get("added_at", "9999") >= cutoff]
+    if old_items:
+        _gs_archive("press_releases", old_items)
+    _PRESS_FILE.write_text(_json.dumps(active_items, ensure_ascii=False, indent=2), encoding="utf-8")
+    _gs_save("press_releases", active_items)
 
 
 def _load_notices() -> list[dict]:
@@ -562,9 +622,14 @@ def _load_notices() -> list[dict]:
 
 
 def _save_notices(notices: list[dict]) -> None:
-    """공지사항 저장: JSON + Google Sheets 동시 저장."""
-    _NOTICES_FILE.write_text(_json.dumps(notices, ensure_ascii=False, indent=2), encoding="utf-8")
-    _gs_save("notices", notices)
+    """공지사항 저장: 30일 초과 항목은 archive로 이동, 나머지는 JSON + Google Sheets 저장."""
+    cutoff = (get_kst_now() - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
+    old_items    = [n for n in notices if n.get("added_at", "9999") < cutoff]
+    active_items = [n for n in notices if n.get("added_at", "9999") >= cutoff]
+    if old_items:
+        _gs_archive("notices", old_items)
+    _NOTICES_FILE.write_text(_json.dumps(active_items, ensure_ascii=False, indent=2), encoding="utf-8")
+    _gs_save("notices", active_items)
 
 
 def _load_smp_rec() -> list[dict]:
