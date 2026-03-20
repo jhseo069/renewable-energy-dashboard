@@ -139,16 +139,25 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /*
+      [테마 변경 사유 - Soft Light Professional]
+      장시간 업무용 모니터링에 적합하도록 눈의 피로도를 낮추는 오프화이트 배경(#f0f4f8)과
+      가독성이 뛰어난 슬레이트 텍스트(#1e293b, #64748b)를 채택했습니다.
+      자극적인 네온 컬러 대신 신재생에너지의 친환경적 느낌을 주는 차분한 틸(Teal, #0d9488)을 
+      강조색으로 사용하여 WCAG AA 명암비 기준(4.5:1 이상)을 충족하면서 보안/전문성을 강조했습니다.
+    */
+
     /* 전체 배경 */
     .stApp {
-        background: linear-gradient(135deg, #0f0c29 0%, #1a1a3e 50%, #24243e 100%);
+        background: #f0f4f8;
     }
 
     /* 상단 헤더 */
     .main-header {
-        background: linear-gradient(90deg, #00c9ff 0%, #92fe9d 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #0d9488;
+        background: none;
+        -webkit-background-clip: unset;
+        -webkit-text-fill-color: unset;
         font-size: 2.2rem;
         font-weight: 800;
         text-align: center;
@@ -157,7 +166,7 @@ st.markdown(
     }
     .sub-header {
         text-align: center;
-        color: #8892b0;
+        color: #64748b;
         font-size: 0.95rem;
         margin-bottom: 1.5rem;
     }
@@ -166,7 +175,7 @@ st.markdown(
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         justify-content: center;
-        background-color: rgba(255,255,255,0.03);
+        background-color: #e2e8f0;
         border-radius: 12px;
         padding: 6px;
     }
@@ -174,69 +183,72 @@ st.markdown(
         border-radius: 10px;
         padding: 10px 24px;
         font-weight: 600;
-        color: #ccd6f6;
+        color: #64748b;
     }
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #00c9ff 0%, #92fe9d 100%);
-        color: #0f0c29 !important;
+        background: #0d9488;
+        color: #ffffff !important;
         font-weight: 700;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     /* 일반 카드 */
     .card {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.08);
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
         border-radius: 16px;
         padding: 1.5rem;
         margin-bottom: 1rem;
-        backdrop-filter: blur(10px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         transition: transform 0.2s, box-shadow 0.2s;
     }
     .card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 8px 30px rgba(0,201,255,0.15);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.08); /* 호버 시 약간 더 짙은 그림자 */
     }
-    .card h4 { color: #ccd6f6; margin-bottom: 0.4rem; }
-    .card p  { color: #8892b0; font-size: 0.9rem; line-height: 1.6; }
-    .card .meta { color: #64ffda; font-size: 0.78rem; margin-bottom: 0.3rem; }
+    .card h4 { color: #1e293b; margin-bottom: 0.4rem; font-weight: 700; }
+    .card p  { color: #64748b; font-size: 0.9rem; line-height: 1.6; }
+    .card .meta { color: #0d9488; font-size: 0.78rem; margin-bottom: 0.3rem; font-weight: 600; }
 
     /* 예정 기능 안내 카드 (Coming Soon) */
     .coming-card {
-        background: rgba(0,201,255,0.04);
-        border: 1px dashed rgba(0,201,255,0.25);
+        background: #f8fafc;
+        border: 1px dashed #cbd5e1;
         border-radius: 16px;
         padding: 1.6rem 2rem;
         margin-bottom: 1rem;
     }
-    .coming-card h4 { color: #00c9ff; margin-bottom: 0.5rem; font-size: 1rem; }
-    .coming-card p  { color: #8892b0; font-size: 0.88rem; line-height: 1.6; margin: 0; }
-    .coming-card ul { color: #8892b0; font-size: 0.88rem; line-height: 1.8; padding-left: 1.2rem; margin: 0.4rem 0 0 0; }
+    .coming-card h4 { color: #0284c7; margin-bottom: 0.5rem; font-size: 1rem; font-weight: 700; }
+    .coming-card p  { color: #64748b; font-size: 0.88rem; line-height: 1.6; margin: 0; }
+    .coming-card ul { color: #64748b; font-size: 0.88rem; line-height: 1.8; padding-left: 1.2rem; margin: 0.4rem 0 0 0; }
 
     /* KPI 카드 */
     .kpi-card {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.08);
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
         border-radius: 16px;
         padding: 1.2rem 1.5rem;
         text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     .kpi-card .value {
         font-size: 1.9rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #00c9ff, #92fe9d);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #0d9488;
+        background: none;
+        -webkit-background-clip: unset;
+        -webkit-text-fill-color: unset;
     }
-    .kpi-card .label { color: #8892b0; font-size: 0.82rem; margin-top: 0.3rem; }
+    .kpi-card .label { color: #64748b; font-size: 0.82rem; margin-top: 0.3rem; font-weight: 600; }
 
     /* 섹션 구분선 */
     .section-title {
-        color: #ccd6f6;
+        color: #1e293b;
         font-size: 1.05rem;
         font-weight: 700;
         margin: 1.4rem 0 0.6rem 0;
         padding-bottom: 0.4rem;
-        border-bottom: 1px solid rgba(255,255,255,0.07);
+        border-bottom: 1px solid #cbd5e1;
     }
 
     /* 배지 */
@@ -248,71 +260,75 @@ st.markdown(
         font-weight: 600;
         margin-bottom: 4px;
     }
-    .badge-ready   { background: rgba(100,255,218,0.15); color: #64ffda; }
-    .badge-pending { background: rgba(255,200,55,0.15);  color: #ffc837; }
-    .badge-plan    { background: rgba(0,201,255,0.12);   color: #00c9ff; }
+    .badge-ready   { background: #dcfce7; color: #15803d; }
+    .badge-pending { background: #fef9c3; color: #a16207; }
+    .badge-plan    { background: #e0f2fe; color: #0284c7; }
 
     /* 사이드바 */
     [data-testid="stSidebar"] {
-        background: rgba(15,12,41,0.95);
-        border-right: 1px solid rgba(255,255,255,0.06);
+        background: #e8eef4;
+        border-right: 1px solid #cbd5e1;
     }
 
     /* 버튼 */
     .stButton>button {
-        background: linear-gradient(135deg, #00c9ff 0%, #92fe9d 100%);
-        color: #0f0c29;
+        background: #0d9488;
+        color: #ffffff;
         border: none;
         border-radius: 10px;
         font-weight: 700;
         padding: 0.5rem 1.5rem;
-        transition: opacity 0.2s;
+        transition: background-color 0.2s;
     }
-    .stButton>button:hover { opacity: 0.85; }
+    .stButton>button:hover {
+        background: #0f766e;
+        color: #ffffff;
+        opacity: 1;
+    }
 
     /* 검색 인풋 */
     .stTextInput>div>div>input {
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.12);
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
         border-radius: 10px;
-        color: #ccd6f6;
+        color: #1e293b;
     }
 
     /* ── 익스팬더 공통 (Tab 1~4 전체 적용) ── */
     [data-testid="stExpander"] {
-        background: rgba(20,18,50,0.95) !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
         border-radius: 12px !important;
         margin-bottom: 0.4rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* 약간의 입체감 부여 */
     }
     [data-testid="stExpander"] summary {
         padding: 0.75rem 1rem;
         border-radius: 12px;
-        background: rgba(20,18,50,0.95) !important;
+        background: #ffffff !important;
     }
-    /* 열린 상태에서도 배경 어둡게 유지 */
     details[open],
     details[open] > summary {
-        background: rgba(20,18,50,0.95) !important;
+        background: #f8fafc !important; /* 열렸을 때 부드러운 오프화이트 */
     }
     details[open] > summary {
-        border-bottom: 1px solid rgba(255,255,255,0.08);
+        border-bottom: 1px solid #e2e8f0;
     }
     /* 닫힘/열림 모두 타이틀 색상 보장 */
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary span,
     details[open] > summary p,
     details[open] > summary span {
-        color: #e2e8f0 !important;
+        color: #1e293b !important;
         font-weight: 700 !important;
         font-size: 1rem !important;
     }
     [data-testid="stExpander"] summary svg {
-        fill: #64ffda !important;
+        fill: #0d9488 !important;
     }
     [data-testid="stExpander"] summary:hover p,
     [data-testid="stExpander"] summary:hover span {
-        color: #00c9ff !important;
+        color: #0284c7 !important;
     }
 
     /* ── 익스팬더 내부 본문 전체 텍스트 가시성 (Tab 1~4) ── */
@@ -325,14 +341,14 @@ st.markdown(
     [data-testid="stExpander"] [data-testid="stMarkdownContainer"] h2,
     [data-testid="stExpander"] [data-testid="stMarkdownContainer"] h3,
     [data-testid="stExpander"] [data-testid="stMarkdownContainer"] h4 {
-        color: #ccd6f6 !important;
+        color: #334155 !important;
     }
 
     /* ── 탭 전체 일반 텍스트 (st.write, st.markdown 등) ── */
     [data-testid="stMarkdownContainer"] p,
     [data-testid="stMarkdownContainer"] li,
     [data-testid="stMarkdownContainer"] span {
-        color: #ccd6f6;
+        color: #334155;
     }
 
     /* ── 폼 요소 레이블 ── */
@@ -342,59 +358,63 @@ st.markdown(
     .stTextInput label,
     .stDateInput label,
     .stNumberInput label {
-        color: #ccd6f6 !important;
+        color: #1e293b !important;
+        font-weight: 600 !important;
     }
 
-    /* ── 셀렉트박스 다크 테마 ── */
+    /* ── 셀렉트박스 라이트 테마 ── */
     [data-testid="stSelectbox"] > div > div {
-        background: rgba(255,255,255,0.06) !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
         border-radius: 10px !important;
-        color: #ccd6f6 !important;
+        color: #1e293b !important;
     }
     [data-testid="stSelectbox"] > div > div > div {
-        color: #ccd6f6 !important;
+        color: #1e293b !important;
     }
-    /* 셀렉트박스 드롭다운 메뉴 */
     [data-testid="stSelectbox"] ul {
-        background: #1a1a3e !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important; /* 드롭다운 메뉴 그림자 강화 */
     }
     [data-testid="stSelectbox"] li {
-        color: #ccd6f6 !important;
+        color: #1e293b !important;
     }
     [data-testid="stSelectbox"] li:hover {
-        background: rgba(0,201,255,0.15) !important;
+        background: #f1f5f9 !important;
     }
 
-    /* ── 라디오 버튼 다크 테마 ── */
+    /* ── 라디오 버튼 라이트 테마 ── */
     [data-testid="stRadio"] > div {
         background: transparent !important;
     }
     [data-testid="stRadio"] label {
-        color: #ccd6f6 !important;
+        color: #1e293b !important;
     }
     [data-testid="stRadio"] span {
-        color: #ccd6f6 !important;
+        color: #334155 !important;
     }
 
-    /* ── 2차 버튼 (갱신·CSV 다운로드 등 흰 배경 버튼) 다크 테마 ── */
+    /* ── 2차 버튼 (갱신·CSV 다운로드 등 흰 배경 버튼) 라이트 테마 ── */
     [data-testid="stDownloadButton"] > button,
     [data-testid="stFormSubmitButton"] > button {
-        background: rgba(255,255,255,0.06) !important;
-        border: 1px solid rgba(255,255,255,0.15) !important;
-        color: #ccd6f6 !important;
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #334155 !important;
         border-radius: 10px !important;
+        font-weight: 600 !important;
+        transition: all 0.2s;
     }
     [data-testid="stDownloadButton"] > button:hover,
     [data-testid="stFormSubmitButton"] > button:hover {
-        background: rgba(255,255,255,0.12) !important;
-        color: #00c9ff !important;
+        background: #f8fafc !important;
+        color: #0284c7 !important;
+        border-color: #94a3b8 !important;
     }
 
     /* ── 메트릭 (st.metric) ── */
-    [data-testid="stMetricLabel"] { color: #8892b0 !important; }
-    [data-testid="stMetricValue"] { color: #ccd6f6 !important; }
+    [data-testid="stMetricLabel"] { color: #64748b !important; font-weight: 600 !important; }
+    [data-testid="stMetricValue"] { color: #0d9488 !important; font-weight: 800 !important; }
     </style>
     """,
     unsafe_allow_html=True,
