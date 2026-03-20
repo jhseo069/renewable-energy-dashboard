@@ -504,7 +504,8 @@ st.markdown(
         font-size: 2.2rem !important;
     }
     </style>
-    """
+    """,
+    unsafe_allow_html=True,
 )
 
 
