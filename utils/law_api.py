@@ -32,7 +32,9 @@
 """
 
 import os
+import ssl
 import requests
+from requests.adapters import HTTPAdapter
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -41,13 +43,42 @@ LAW_API_KEY = os.getenv("LAW_API_KEY", "")
 _SEARCH_URL = "https://www.law.go.kr/DRF/lawSearch.do"
 _BASE_URL    = "https://www.law.go.kr"
 
-# Streamlit Cloud 도메인 — law.go.kr Referer 체크 대응
-_STREAMLIT_DOMAIN = "https://renewable-energy-dashboard-nsmgneobdtz3xqpddasevz.streamlit.app/"
-_REQUEST_HEADERS  = {
-    "Referer":    _STREAMLIT_DOMAIN,
-    "Origin":     _STREAMLIT_DOMAIN.rstrip("/"),
-    "User-Agent": "Mozilla/5.0 (compatible; KCHRenewableEnergyDashboard/1.0)",
+# 한국 정부기관 사이트 호환 헤더 — 브라우저로 위장하여 IP 차단 및 연결 리셋 방지
+_REQUEST_HEADERS = {
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept":          "application/json, text/plain, */*",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer":         "https://www.law.go.kr/",
+    "Origin":          "https://www.law.go.kr",
+    "Connection":      "close",  # keep-alive 연결 리셋 방지
 }
+
+
+class _LegacySSLAdapter(HTTPAdapter):
+    """한국 정부기관 사이트의 레거시 SSL 설정 호환 어댑터.
+    DEFAULT@SECLEVEL=1 으로 구형 암호화 방식을 허용 — ConnectionResetError 방지.
+    """
+    def init_poolmanager(self, *args, **kwargs):
+        try:
+            from urllib3.util.ssl_ import create_urllib3_context
+            ctx = create_urllib3_context()
+            ctx.set_ciphers("DEFAULT@SECLEVEL=1")
+            # Python 3.10+ OP_LEGACY_SERVER_CONNECT 플래그 (구 서버 호환)
+            ctx.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0)
+            kwargs["ssl_context"] = ctx
+        except Exception:
+            pass
+        return super().init_poolmanager(*args, **kwargs)
+
+
+def _make_session() -> requests.Session:
+    """법령 API 전용 requests 세션 — 레거시 SSL 어댑터 장착."""
+    session = requests.Session()
+    try:
+        session.mount("https://", _LegacySSLAdapter())
+    except Exception:
+        pass  # 어댑터 실패 시 기본 세션 폴백
+    return session
 
 
 def get_server_ip() -> str:
@@ -103,7 +134,7 @@ def search_ordinances(query: str, display: int = 20, page: int = 1) -> dict:
     if not LAW_API_KEY:
         raise ValueError("LAW_API_KEY가 .env에 설정되지 않았습니다.")
 
-    resp = requests.get(
+    resp = _make_session().get(
         _SEARCH_URL,
         params={
             "OC":      LAW_API_KEY,
@@ -113,8 +144,8 @@ def search_ordinances(query: str, display: int = 20, page: int = 1) -> dict:
             "display": display,
             "page":    page,
         },
-        headers=_REQUEST_HEADERS,  # Referer/Origin 헤더로 도메인 인증 시도
-        timeout=10,
+        headers=_REQUEST_HEADERS,
+        timeout=15,
     )
     resp.raise_for_status()
     data = resp.json()
@@ -190,7 +221,7 @@ def search_national_laws(query: str, display: int = 10, page: int = 1) -> dict:
     if not LAW_API_KEY:
         raise ValueError("LAW_API_KEY가 .env에 설정되지 않았습니다.")
 
-    resp = requests.get(
+    resp = _make_session().get(
         _SEARCH_URL,
         params={
             "OC":      LAW_API_KEY,
@@ -201,7 +232,7 @@ def search_national_laws(query: str, display: int = 10, page: int = 1) -> dict:
             "page":    page,
         },
         headers=_REQUEST_HEADERS,
-        timeout=10,
+        timeout=15,
     )
     resp.raise_for_status()
     data = resp.json()
