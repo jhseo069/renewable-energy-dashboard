@@ -33,6 +33,7 @@
 
 import os
 import ssl
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from dotenv import load_dotenv
@@ -221,21 +222,33 @@ def search_national_laws(query: str, display: int = 10, page: int = 1) -> dict:
     if not LAW_API_KEY:
         raise ValueError("LAW_API_KEY가 .env에 설정되지 않았습니다.")
 
-    resp = _make_session().get(
-        _SEARCH_URL,
-        params={
-            "OC":      LAW_API_KEY,
-            "target":  "law",     # 국가법령 검색
-            "query":   query,
-            "type":    "JSON",
-            "display": display,
-            "page":    page,
-        },
-        headers=_REQUEST_HEADERS,
-        timeout=15,
-    )
-    resp.raise_for_status()
-    data = resp.json()
+    # Cloud 환경에서 law.go.kr 국가법령 서버가 연결을 리셋하는 경우가 있어
+    # 최대 3회 재시도 (1초 간격)
+    last_exc: Exception = RuntimeError("요청 실패")
+    for attempt in range(3):
+        try:
+            resp = _make_session().get(
+                _SEARCH_URL,
+                params={
+                    "OC":      LAW_API_KEY,
+                    "target":  "law",
+                    "query":   query,
+                    "type":    "JSON",
+                    "display": display,
+                    "page":    page,
+                },
+                headers=_REQUEST_HEADERS,
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            break  # 성공 시 루프 탈출
+        except requests.exceptions.ConnectionError as e:
+            last_exc = e
+            if attempt < 2:
+                time.sleep(1)  # 1초 대기 후 재시도
+    else:
+        raise last_exc  # 3회 모두 실패
 
     # 오류 감지
     if "result" in data:

@@ -1162,7 +1162,12 @@ with tab1:
                 search_error = str(e)
 
             if search_error:
-                st.error(f"❌ 검색 오류: {search_error}")
+                st.warning(
+                    f"⚠️ 국가법령 검색 실패 (서버 연결 오류) — "
+                    f"[🔗 law.go.kr에서 직접 검색하기 ↗](https://www.law.go.kr/lsSc.do?query={search_query})"
+                    "\n\n> Streamlit Cloud(AWS) IP가 law.go.kr 국가법령 서버에서 차단될 수 있습니다. "
+                    "지자체 조례 검색은 정상 동작합니다."
+                )
 
             st.session_state["law_nat_result"]  = nat_result
             st.session_state["law_ord_result"]  = ord_result
