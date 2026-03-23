@@ -140,38 +140,34 @@ st.markdown(
     """
     <style>
     /*
-      [Premium Dynamic Theme - "Wow!" Edition (가독성 완전 해결 버전)]
-      - 버튼의 기본 형태가 흰색/흰글씨 동기화되는 specificity 문제 완전히 고침
+      [Premium Dynamic Theme - "Wow!" Edition (안전성 최우선 리빌딩 버전)]
+      - 기능 마비가 잦은 강제 색상 오버라이딩 전면 제거
+      - Streamlit 네이티브 테마 변수 100% 존중
+      - 그림자(Shadow), 모서리둥글기(Radius), 전환(Transition) 중심의 고급 호버스킨만 입힘
     */
     
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
 
-    /* === 전역 CSS 변수 === */
+    /* === 전역 CSS 변수 (안전한 값만 유지) === */
     :root {
-        --tint-strong: rgba(13, 148, 136, 0.08);
-        --tint-light: rgba(13, 148, 136, 0.03);
-        --glow-shadow: 0 4px 20px rgba(13, 148, 136, 0.1);
-        --glow-shadow-hover: 0 8px 32px rgba(13, 148, 136, 0.2);
+        --glow-shadow: 0 4px 20px rgba(13, 148, 136, 0.08);
+        --glow-shadow-hover: 0 8px 32px rgba(13, 148, 136, 0.15);
         --kpi-gradient: linear-gradient(135deg, var(--primary-color), #0284c7); 
-        --border-color: rgba(128, 128, 128, 0.25);
+        --glass-bg: linear-gradient(135deg, rgba(255,255,255,0.03), transparent);
     }
 
     html, body, [class*="css"] {
         font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
-        font-weight: 500;
-        color: var(--text-color);
     }
 
+    /* 몽환적인 전체 프리미엄 배경 (앱 틀만 칠함) */
     .stApp {
-        background-image: radial-gradient(circle at 50% -10%, rgba(13, 148, 136, 0.12) 0%, transparent 60%);
+        background-image: radial-gradient(circle at 50% -10%, rgba(13, 148, 136, 0.06) 0%, transparent 60%);
         background-attachment: fixed;
     }
 
+    /* 메인 타이틀 프리미엄라이징 (안전) */
     .main-header {
-        color: var(--text-color);
-        background: none;
-        -webkit-background-clip: unset;
-        -webkit-text-fill-color: unset;
         font-size: 2.5rem;
         font-weight: 900;
         text-align: center;
@@ -183,90 +179,54 @@ st.markdown(
         content: "";
         display: block;
         width: 100px;
-        height: 6px;
+        height: 5px;
         background: var(--kpi-gradient);
         margin: 1.2rem auto 0;
         border-radius: 4px;
-        box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3);
+        box-shadow: 0 2px 8px rgba(13, 148, 136, 0.2);
     }
     .sub-header {
         text-align: center;
-        color: var(--text-color);
         font-size: 1.1rem;
         margin-bottom: 2.5rem;
         font-weight: 700;
-        letter-spacing: 0.5px;
+        opacity: 0.8;
     }
 
-    [data-testid="stSidebar"] {
-        background: linear-gradient(135deg, var(--tint-strong), var(--tint-light)), var(--secondary-background-color) !important;
-        border-right: 1px solid var(--border-color);
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        justify-content: center;
-        background: linear-gradient(135deg, var(--tint-strong), var(--tint-light)), var(--secondary-background-color);
-        border-radius: 12px;
-        padding: 8px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 8px;
-        padding: 10px 24px;
-        font-weight: 700; 
-        color: var(--text-color); 
-        transition: all 0.2s;
-    }
-    .stTabs [data-baseweb="tab"]:hover {
-        background: rgba(13, 148, 136, 0.1);
-        transform: translateY(-1px);
-    }
-    .stTabs [aria-selected="true"] {
-        background: var(--primary-color) !important;
-        color: #ffffff !important;
-        font-weight: 800;
-        box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
-        transform: translateY(-2px);
-    }
-
+    /* === 카드 컨테이너 스킨 (글자색상 터치 절대 금지) === */
     .card {
-        background: linear-gradient(135deg, var(--tint-light), transparent), var(--background-color);
-        border: 1px solid rgba(13, 148, 136, 0.25);
+        background: var(--glass-bg);
+        border: 1px solid rgba(13, 148, 136, 0.15);
         border-top: 4px solid var(--primary-color);
         border-radius: 16px;
         padding: 1.8rem;
         margin-bottom: 1.5rem;
         box-shadow: var(--glow-shadow);
         transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        backdrop-filter: blur(12px);
+        backdrop-filter: blur(8px);
     }
     .card:hover {
-        transform: translateY(-4px);
+        transform: translateY(-3px);
         box-shadow: var(--glow-shadow-hover);
-        border-color: rgba(13, 148, 136, 0.5);
-        z-index: 10;
-        position: relative;
+        border-color: rgba(13, 148, 136, 0.3);
     }
-    .card h4 { color: var(--text-color); margin-bottom: 0.8rem; font-weight: 800; font-size: 1.25rem; letter-spacing: -0.3px; }
-    .card p  { color: var(--text-color); font-size: 1rem; line-height: 1.7; font-weight: 500; }
-    .card .meta { color: var(--primary-color); font-size: 0.9rem; margin-bottom: 0.6rem; font-weight: 800; letter-spacing: 0.2px; text-transform: uppercase; }
+    .card h4 { margin-bottom: 0.8rem; font-weight: 800; font-size: 1.25rem; }
+    .card p  { font-size: 1rem; line-height: 1.7; font-weight: 500; }
+    .card .meta { color: var(--primary-color); font-size: 0.9rem; margin-bottom: 0.6rem; font-weight: 800; }
 
     .coming-card {
         background: transparent;
-        border: 2px dashed rgba(13, 148, 136, 0.5);
+        border: 2px dashed rgba(13, 148, 136, 0.4);
         border-radius: 16px;
         padding: 1.8rem 2rem;
         margin-bottom: 1.5rem;
     }
-    .coming-card h4 { color: var(--primary-color); margin-bottom: 0.5rem; font-size: 1.15rem; font-weight: 800; }
-    .coming-card p  { color: var(--text-color); font-size: 1rem; line-height: 1.6; margin: 0; font-weight: 600;}
-    .coming-card ul { color: var(--text-color); font-size: 1rem; line-height: 1.8; padding-left: 1.2rem; margin: 0.5rem 0 0 0; font-weight: 500;}
 
+    /* === KPI 카드 (안전) === */
     .kpi-card {
         position: relative;
-        background: linear-gradient(var(--background-color), var(--background-color)) padding-box,
-                    var(--kpi-gradient) border-box;
-        border: 2px solid transparent;
+        background: var(--glass-bg);
+        border: 1px solid rgba(13, 148, 136, 0.15);
         border-radius: 16px;
         padding: 1.8rem;
         text-align: center;
@@ -274,28 +234,26 @@ st.markdown(
         transition: transform 0.2s, box-shadow 0.2s;
     }
     .kpi-card:hover {
-        transform: translateY(-4px);
+        transform: translateY(-3px);
         box-shadow: var(--glow-shadow-hover);
-        z-index: 10;
+        border-color: var(--primary-color);
     }
     .kpi-card .value {
         font-size: 2.6rem;
         font-weight: 900;
         color: var(--primary-color);
-        letter-spacing: -1px;
     }
-    .kpi-card .label { color: var(--text-color); font-size: 1rem; margin-top: 0.6rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+    .kpi-card .label { font-size: 1rem; margin-top: 0.6rem; font-weight: 800; opacity: 0.8; }
 
     .section-title {
-        color: var(--text-color);
         font-size: 1.3rem;
         font-weight: 800;
         margin: 2.2rem 0 1rem 0;
         padding-bottom: 0.6rem;
-        border-bottom: 2px solid rgba(13, 148, 136, 0.3);
-        letter-spacing: -0.3px;
+        border-bottom: 2px solid rgba(13, 148, 136, 0.15);
     }
 
+    /* === 뱃지 디자인 (고정색상 유지해도 무방한 영역) === */
     .badge {
         display: inline-block;
         padding: 6px 14px;
@@ -303,198 +261,46 @@ st.markdown(
         font-size: 0.85rem;
         font-weight: 800;
         margin-bottom: 8px;
-        letter-spacing: 0.3px;
     }
-    .badge-ready   { background: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #22c55e; }
-    .badge-pending { background: rgba(234, 179, 8, 0.15); color: #ca8a04; border: 1px solid #eab308; }
-    .badge-plan    { background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid #0ea5e9; }
+    .badge-ready   { background: rgba(34, 197, 94, 0.1); color: #16a34a; border: 1px solid rgba(34, 197, 94, 0.3); }
+    .badge-pending { background: rgba(234, 179, 8, 0.1); color: #ca8a04; border: 1px solid rgba(234, 179, 8, 0.3); }
+    .badge-plan    { background: rgba(14, 165, 233, 0.1); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3); }
 
-    /* === 강력한 액션 버튼 (완벽 타겟팅) === */
-    /* Streamlit의 다양한 버전(1.20 ~ 1.35+)에서의 버튼 DOM 속성 모조리 포위 */
-    button[kind="secondary"],
-    button[kind="primary"],
-    div[data-testid="stButton"] button,
-    button[data-testid="baseButton-secondary"],
-    button[data-testid="baseButton-primary"],
-    .stButton > button {
-        background-color: var(--primary-color) !important; 
-        color: #ffffff !important;
-        border: none !important;
+    /* === 버튼 호버 이펙트 (색상 강제 할당 전부 삭제, 오직 트랜지션만 제어) === */
+    div[data-testid="stButton"] button {
         border-radius: 10px !important;
-        font-weight: 800 !important;
-        font-size: 1rem !important;
-        padding: 0.8rem 1.8rem !important;
-        transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s !important;
-        box-shadow: 0 4px 10px rgba(13, 148, 136, 0.3) !important;
+        font-weight: 700 !important;
+        transition: transform 0.2s, box-shadow 0.2s !important;
     }
-    button[kind="secondary"]:hover,
-    button[kind="primary"]:hover,
-    div[data-testid="stButton"] button:hover,
-    button[data-testid="baseButton-secondary"]:hover,
-    button[data-testid="baseButton-primary"]:hover,
-    .stButton > button:hover {
+    div[data-testid="stButton"] button:hover {
         transform: translateY(-2px) !important;
-        box-shadow: 0 6px 16px rgba(13, 148, 136, 0.4) !important;
-        background-color: #0f766e !important;
-        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(13, 148, 136, 0.2) !important;
     }
 
-    button[kind="secondary"] p,
-    button[kind="primary"] p,
-    div[data-testid="stButton"] button p,
-    button[data-testid="baseButton-secondary"] p,
-    button[data-testid="baseButton-primary"] p,
-    .stButton > button p {
-        color: #ffffff !important;
-        font-weight: 800 !important;
-    }
-
-    /* === 비활성화 버튼 (Disabled) === */
-    button[kind="secondary"][disabled],
-    button[kind="primary"][disabled],
-    div[data-testid="stButton"] button[disabled],
-    button[data-testid="baseButton-secondary"][disabled],
-    button[data-testid="baseButton-primary"][disabled],
-    .stButton > button[disabled] {
-        background-color: rgba(128, 128, 128, 0.2) !important;
-        color: var(--text-color) !important;
-        box-shadow: none !important;
-        opacity: 0.6 !important;
-    }
-    button[kind="secondary"][disabled] p,
-    button[kind="primary"][disabled] p,
-    div[data-testid="stButton"] button[disabled] p,
-    button[data-testid="baseButton-secondary"][disabled] p,
-    button[data-testid="baseButton-primary"][disabled] p,
-    .stButton > button[disabled] p {
-        color: var(--text-color) !important;
-    }
-
-    /* === 입력 폼 === */
-    .stTextInput>div>div>input {
-        background: linear-gradient(rgba(255,255,255,0.02), rgba(255,255,255,0.02)), var(--background-color);
-        border: 1px solid rgba(13, 148, 136, 0.4);
-        border-radius: 10px;
-        color: var(--text-color);
-        font-weight: 600;
-        padding: 0.7rem 1.2rem;
-        transition: border-color 0.2s, box-shadow 0.2s;
-    }
-    .stTextInput>div>div>input:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.3);
-    }
-
+    /* === 확장 패널(Expander) 안전한 테두리 스킨 === */
     [data-testid="stExpander"] {
-        background: linear-gradient(135deg, var(--tint-light), transparent), var(--background-color) !important;
-        border: 1px solid rgba(13, 148, 136, 0.25) !important;
+        border: 1px solid rgba(13, 148, 136, 0.15) !important;
         border-radius: 12px !important;
+        background: var(--glass-bg);
         margin-bottom: 0.8rem;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     }
     [data-testid="stExpander"]:hover {
-        border-color: rgba(13, 148, 136, 0.5) !important;
+        border-color: rgba(13, 148, 136, 0.3) !important;
     }
-    [data-testid="stExpander"] summary {
-        padding: 1.2rem 1.5rem;
+    [data-testid="stExpander"] details summary {
         border-radius: 12px;
-        background: transparent !important;
     }
-    details[open] > summary {
-        border-bottom: 1px solid rgba(13, 148, 136, 0.25);
-        background: rgba(13, 148, 136, 0.05) !important;
-    }
-    [data-testid="stExpander"] summary p,
-    [data-testid="stExpander"] summary span,
-    details[open] > summary p,
-    details[open] > summary span {
-        color: var(--text-color) !important;
-        font-weight: 900 !important;
-        font-size: 1.15rem !important;
+    [data-testid="stExpander"] summary span {
+        font-weight: 800 !important;
+        font-size: 1.1rem !important;
     }
     [data-testid="stExpander"] summary svg {
         fill: var(--primary-color) !important;
     }
-
-    [data-testid="stMarkdownContainer"],
-    [data-testid="stMarkdownContainer"] p,
-    [data-testid="stMarkdownContainer"] li,
-    [data-testid="stMarkdownContainer"] span,
-    [data-testid="stMarkdownContainer"] strong,
-    [data-testid="stMarkdownContainer"] h1,
-    [data-testid="stMarkdownContainer"] h2,
-    [data-testid="stMarkdownContainer"] h3,
-    [data-testid="stMarkdownContainer"] h4 {
-        color: var(--text-color) !important;
-    }
     
-    [data-testid="stMarkdownContainer"] a {
-        color: #0284c7 !important; 
-        font-weight: 800 !important;
-        text-decoration: underline !important;
-    }
-    @media (prefers-color-scheme: dark) {
-        [data-testid="stMarkdownContainer"] a {
-            color: #38bdf8 !important; 
-        }
-    }
-
-    .stSelectbox label,
-    .stRadio label,
-    .stCheckbox label,
-    .stTextInput label,
-    .stDateInput label,
-    .stNumberInput label {
-        color: var(--text-color) !important;
-        font-weight: 800 !important;
-        font-size: 1rem !important;
-        letter-spacing: 0.2px;
-    }
-
-    [data-testid="stSelectbox"] > div > div {
-        background: linear-gradient(rgba(255,255,255,0.02), rgba(255,255,255,0.02)), var(--background-color) !important;
-        border: 1px solid rgba(13, 148, 136, 0.4) !important;
-        border-radius: 10px !important;
-        color: var(--text-color) !important;
-    }
-    [data-testid="stSelectbox"] > div > div:focus-within {
-        border-color: var(--primary-color) !important;
-        box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.3) !important;
-    }
-    [data-testid="stSelectbox"] > div > div > div {
-        color: var(--text-color) !important;
-        font-weight: 700 !important;
-    }
-
-    [data-testid="stRadio"] > div { background: transparent !important; }
-    [data-testid="stRadio"] label { color: var(--text-color) !important; }
-    [data-testid="stRadio"] span { color: var(--text-color) !important; font-weight: 700 !important; }
-
-    /* === 보조 버튼 다운로드/제출 === */
-    button[data-testid="baseButton-secondaryFormSubmit"],
-    [data-testid="stDownloadButton"] > button {
-        background-color: transparent !important;
-        border: 2px solid var(--primary-color) !important;
-        color: var(--primary-color) !important;
-        border-radius: 10px !important;
-        font-weight: 800 !important;
-        padding: 0.6rem 1.6rem !important;
-        transition: all 0.2s ease !important;
-        box-shadow: none !important;
-    }
-    button[data-testid="baseButton-secondaryFormSubmit"]:hover,
-    [data-testid="stDownloadButton"] > button:hover {
-        background-color: var(--primary-color) !important;
-        color: #ffffff !important;
-        box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3) !important;
-        transform: translateY(-2px) !important;
-    }
-
-    [data-testid="stMetricLabel"] { color: var(--text-color) !important; font-weight: 800 !important; font-size: 1.05rem !important; text-transform: uppercase;}
-    [data-testid="stMetricValue"] { 
-        color: var(--primary-color) !important; 
-        font-weight: 900 !important; 
-        font-size: 2.6rem !important;
+    /* 텍스트 폰트 두께 살짝 올려주기 (색상은 순정유지) */
+    p, li, span, strong, h1, h2, h3, h4 {
+        font-weight: 500;
     }
     </style>
     """,
