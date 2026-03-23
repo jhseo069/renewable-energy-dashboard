@@ -140,252 +140,262 @@ st.markdown(
     """
     <style>
     /*
-      [완전 연동형 Dual Theme (Streamlit 기본 테마 토글 100% 대응)]
-      - Light Mode: .streamlit/config.toml 에 정의된 색상을 기반으로 Corporate & Glass 스타일 렌더링
-      - Dark Mode: Streamlit의 자체 Dark Mode 변수를 찾아 자연스럽게 반전 (CSS 변수 매핑)
+      [Premium Dynamic Theme - "Wow!" Edition]
+      - Streamlit 네이티브 테마(Light/Dark 토글) 100% 완벽 호환
+      - Glow Aura 배경색, Smart Glass 틴팅, 네온 글로우(Neon Glow) 애니메이션 적용
     */
     
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
 
-    /* CSS 변수 선언 (Streamlit Native 변수를 우리 구조에 맵핑) */
+    /* === 전역 CSS 변수 (Streamlit 네이티브 속성 매핑) === */
     :root {
-        --app-bg: var(--background-color);
-        --sidebar-bg: var(--secondary-background-color);
-        --card-bg: var(--background-color);
-        
-        --card-border: 1px solid rgba(128, 128, 128, 0.2);
-        --card-border-top: 3px solid var(--primary-color);
-        --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        --card-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.15);
-        --card-hover-transform: translateY(-4px);
-        
-        --text-main: var(--text-color);
-        --text-sub: var(--text-color);
-        --accent-primary: var(--primary-color);
-        --accent-hover: var(--primary-color);
+        --tint-strong: rgba(13, 148, 136, 0.08);
+        --tint-light: rgba(13, 148, 136, 0.02);
+        --glow-shadow: 0 8px 32px rgba(13, 148, 136, 0.12);
+        --glow-shadow-hover: 0 12px 48px rgba(13, 148, 136, 0.25);
         --kpi-gradient: linear-gradient(135deg, var(--primary-color), #38bdf8);
-        --radius-main: 12px;
-        --divider-color: rgba(128, 128, 128, 0.2);
-        --input-bg: var(--background-color);
-        
-        --btn-text: #ffffff;
+        --border-color: rgba(128, 128, 128, 0.15);
     }
 
-    /* === 전체 폰트 및 구조 === */
+    /* === 전체 폰트 적용 === */
     html, body, [class*="css"] {
         font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
     }
 
+    /* === Glow Aura 배경 (가장 핵심 포인트) === */
     .stApp {
-        /* background 속성을 비워둠으로써 Native toggle 을 완벽히 수용함 */
+        /* Streamlit 네이티브 배경색을 존중하되, 그 위에 최상단에서 퍼지는 신비로운 틸(Teal) 오라를 덮어씌움 */
+        background-image: radial-gradient(circle at 50% -10%, rgba(13, 148, 136, 0.15) 0%, transparent 60%);
+        background-attachment: fixed;
     }
 
-    /* === 상단 헤더 === */
+    /* === 상단 헤더 & 네온 아우라 === */
     .main-header {
-        color: var(--text-main);
+        color: var(--text-color);
         background: none;
         -webkit-background-clip: unset;
         -webkit-text-fill-color: unset;
-        font-size: 2.3rem;
+        font-size: 2.5rem;
         font-weight: 800;
         text-align: center;
-        padding: 1rem 0 0.5rem 0;
+        padding: 1.5rem 0 0.5rem 0;
         letter-spacing: -0.5px;
         position: relative;
+        text-shadow: 0 0 40px rgba(13, 148, 136, 0.3); /* 타이틀 네온 글로우 */
     }
     .main-header::after {
         content: "";
         display: block;
-        width: 80px;
-        height: 5px;
+        width: 100px;
+        height: 6px;
         background: var(--kpi-gradient);
-        margin: 0.8rem auto 0;
-        border-radius: 3px;
+        margin: 1.2rem auto 0;
+        border-radius: 4px;
+        box-shadow: 0 4px 12px rgba(13, 148, 136, 0.4);
     }
     .sub-header {
         text-align: center;
-        color: var(--text-sub);
-        opacity: 0.8;
-        font-size: 1rem;
-        margin-bottom: 2rem;
+        color: var(--text-color);
+        opacity: 0.7;
+        font-size: 1.05rem;
+        margin-bottom: 2.5rem;
         font-weight: 500;
+        letter-spacing: 0.5px;
+    }
+
+    /* === 사이드바 (Smart Tint) === */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(135deg, var(--tint-strong), var(--tint-light)), var(--secondary-background-color) !important;
+        border-right: 1px solid var(--border-color);
     }
 
     /* === 탭 스타일 === */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         justify-content: center;
-        background-color: var(--sidebar-bg);
-        border-radius: var(--radius-main);
-        padding: 6px;
+        background: linear-gradient(135deg, var(--tint-strong), var(--tint-light)), var(--secondary-background-color);
+        border-radius: 16px;
+        padding: 8px;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
     }
     .stTabs [data-baseweb="tab"] {
-        border-radius: calc(var(--radius-main) - 4px);
+        border-radius: 12px;
         padding: 10px 24px;
         font-weight: 600;
-        color: var(--text-sub);
-        opacity: 0.7;
+        color: var(--text-color);
+        opacity: 0.6;
+        transition: all 0.3s;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
     }
     .stTabs [aria-selected="true"] {
-        background: var(--accent-primary) !important;
-        color: var(--btn-text) !important;
+        background: var(--primary-color) !important;
+        color: #ffffff !important;
         font-weight: 700;
         opacity: 1;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        box-shadow: 0 4px 16px rgba(13, 148, 136, 0.4);
+        transform: translateY(-2px);
     }
 
-    /* === 카드 전용 === */
+    /* === 일반 카드 (Smart Glass) === */
     .card {
-        background: var(--card-bg);
-        border: var(--card-border);
-        border-top: var(--card-border-top);
-        border-radius: var(--radius-main);
-        padding: 1.6rem;
-        margin-bottom: 1.2rem;
-        box-shadow: var(--card-shadow);
-        transition: transform 0.25s, box-shadow 0.25s;
+        background: linear-gradient(135deg, var(--tint-light), transparent), var(--background-color);
+        border: 1px solid rgba(13, 148, 136, 0.2);
+        border-top: 3px solid var(--primary-color);
+        border-radius: 16px;
+        padding: 1.8rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--glow-shadow);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        backdrop-filter: blur(12px);
     }
     .card:hover {
-        transform: var(--card-hover-transform);
-        box-shadow: var(--card-shadow-hover);
+        transform: translateY(-5px) scale(1.01);
+        box-shadow: var(--glow-shadow-hover);
+        border-color: rgba(13, 148, 136, 0.4);
         z-index: 10;
         position: relative;
     }
-    .card h4 { color: var(--text-main); margin-bottom: 0.5rem; font-weight: 700; font-size: 1.15rem; letter-spacing: -0.3px; }
-    .card p  { color: var(--text-main); opacity: 0.85; font-size: 0.95rem; line-height: 1.6; }
-    .card .meta { color: var(--accent-primary); font-size: 0.8rem; margin-bottom: 0.4rem; font-weight: 600; letter-spacing: 0.2px; }
+    .card h4 { color: var(--text-color); margin-bottom: 0.6rem; font-weight: 800; font-size: 1.2rem; letter-spacing: -0.3px; }
+    .card p  { color: var(--text-color); opacity: 0.85; font-size: 0.95rem; line-height: 1.7; }
+    .card .meta { color: var(--primary-color); font-size: 0.85rem; margin-bottom: 0.5rem; font-weight: 700; letter-spacing: 0.2px; text-transform: uppercase; }
 
     /* === 예정 기능 안내 카드 === */
     .coming-card {
         background: transparent;
-        border: 2px dashed var(--accent-primary);
-        border-radius: var(--radius-main);
-        padding: 1.6rem 2rem;
-        margin-bottom: 1rem;
+        border: 2px dashed rgba(13, 148, 136, 0.4);
+        border-radius: 16px;
+        padding: 1.8rem 2rem;
+        margin-bottom: 1.5rem;
+        backdrop-filter: blur(8px);
     }
-    .coming-card h4 { color: var(--accent-primary); margin-bottom: 0.5rem; font-size: 1.05rem; font-weight: 700; }
-    .coming-card p  { color: var(--text-main); opacity: 0.8; font-size: 0.92rem; line-height: 1.6; margin: 0; }
-    .coming-card ul { color: var(--text-main); opacity: 0.8; font-size: 0.92rem; line-height: 1.8; padding-left: 1.2rem; margin: 0.5rem 0 0 0; }
+    .coming-card h4 { color: var(--primary-color); margin-bottom: 0.5rem; font-size: 1.1rem; font-weight: 800; }
+    .coming-card p  { color: var(--text-color); opacity: 0.8; font-size: 0.95rem; line-height: 1.6; margin: 0; }
+    .coming-card ul { color: var(--text-color); opacity: 0.8; font-size: 0.95rem; line-height: 1.8; padding-left: 1.2rem; margin: 0.5rem 0 0 0; }
 
-    /* === KPI 카드 === */
+    /* === KPI 카드 (Gradient Border & Neon Glow) === */
     .kpi-card {
-        background: var(--card-bg);
-        border: var(--card-border);
-        border-top: var(--card-border-top);
-        border-radius: var(--radius-main);
-        padding: 1.5rem;
+        position: relative;
+        background: linear-gradient(var(--background-color), var(--background-color)) padding-box,
+                    var(--kpi-gradient) border-box;
+        border: 2px solid transparent;
+        border-radius: 16px;
+        padding: 1.8rem;
         text-align: center;
-        box-shadow: var(--card-shadow);
-        transition: transform 0.25s, box-shadow 0.25s;
+        box-shadow: var(--glow-shadow);
+        transition: transform 0.3s, box-shadow 0.3s;
     }
     .kpi-card:hover {
-        transform: var(--card-hover-transform);
-        box-shadow: var(--card-shadow-hover);
+        transform: translateY(-6px) scale(1.02);
+        box-shadow: var(--glow-shadow-hover);
+        z-index: 10;
     }
     .kpi-card .value {
-        font-size: 2.2rem;
-        font-weight: 800;
+        font-size: 2.6rem;
+        font-weight: 900;
         background: var(--kpi-gradient);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         letter-spacing: -1px;
+        text-shadow: 0 4px 12px rgba(13, 148, 136, 0.15);
     }
-    .kpi-card .label { color: var(--text-main); opacity: 0.8; font-size: 0.9rem; margin-top: 0.4rem; font-weight: 600; }
+    .kpi-card .label { color: var(--text-color); opacity: 0.8; font-size: 0.95rem; margin-top: 0.5rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
 
     /* === 섹션 타이틀 === */
     .section-title {
-        color: var(--text-main);
-        font-size: 1.15rem;
-        font-weight: 700;
-        margin: 1.8rem 0 0.8rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid var(--divider-color);
+        color: var(--text-color);
+        font-size: 1.25rem;
+        font-weight: 800;
+        margin: 2.2rem 0 1rem 0;
+        padding-bottom: 0.6rem;
+        border-bottom: 2px solid rgba(13, 148, 136, 0.2);
         letter-spacing: -0.3px;
     }
 
-    /* === 배지 === */
+    /* === 상태 배지 === */
     .badge {
         display: inline-block;
-        padding: 4px 12px;
+        padding: 6px 14px;
         border-radius: 20px;
         font-size: 0.78rem;
-        font-weight: 700;
-        margin-bottom: 6px;
-        letter-spacing: 0.2px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        letter-spacing: 0.3px;
     }
-    .badge-ready   { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
-    .badge-pending { background: rgba(234, 179, 8, 0.15); color: #eab308; }
-    .badge-plan    { background: rgba(14, 165, 233, 0.15); color: #0ea5e9; }
+    .badge-ready   { background: rgba(34, 197, 94, 0.12); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); }
+    .badge-pending { background: rgba(234, 179, 8, 0.12); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3); }
+    .badge-plan    { background: rgba(14, 165, 233, 0.12); color: #0ea5e9; border: 1px solid rgba(14, 165, 233, 0.3); }
 
-    /* === 사이드바 === */
-    [data-testid="stSidebar"] {
-        background: var(--sidebar-bg);
-        border-right: 1px solid var(--divider-color);
-    }
-
-    /* === 기본 버튼 === */
+    /* === 강력한 액션 버튼 === */
     .stButton>button {
-        background: var(--accent-primary);
-        color: var(--btn-text);
-        border: none;
-        border-radius: var(--radius-main);
-        font-weight: 700;
-        padding: 0.6rem 1.6rem;
-        transition: transform 0.2s, filter 0.2s, box-shadow 0.2s;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-        letter-spacing: -0.2px;
+        background: var(--kpi-gradient) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 12px !important;
+        font-weight: 800 !important;
+        padding: 0.8rem 1.8rem !important;
+        transition: transform 0.3s, filter 0.3s, box-shadow 0.3s !important;
+        box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3) !important;
+        letter-spacing: 0.5px !important;
     }
     .stButton>button:hover {
-        color: var(--btn-text);
-        filter: brightness(0.9);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+        filter: brightness(1.15) !important;
+        transform: translateY(-3px) !important;
+        box-shadow: 0 8px 20px rgba(13, 148, 136, 0.5) !important;
     }
 
     /* === 입력 폼 === */
     .stTextInput>div>div>input {
-        background: var(--input-bg);
-        border: 1px solid var(--divider-color);
-        border-radius: var(--radius-main);
-        color: var(--text-main);
-        padding: 0.6rem 1rem;
+        background: linear-gradient(rgba(255,255,255,0.02), rgba(255,255,255,0.02)), var(--background-color);
+        border: 1px solid rgba(13, 148, 136, 0.3);
+        border-radius: 12px;
+        color: var(--text-color);
+        padding: 0.7rem 1.2rem;
+        transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .stTextInput>div>div>input:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
     }
 
-    /* === 익스팬더 전체 컨테이너 === */
+    /* === 익스팬더 플로팅 디자인 === */
     [data-testid="stExpander"] {
-        background: var(--card-bg) !important;
-        border: var(--card-border) !important;
-        border-radius: var(--radius-main) !important;
-        margin-bottom: 0.5rem;
-        box-shadow: var(--card-shadow);
-        transition: transform 0.2s, box-shadow 0.2s;
+        background: linear-gradient(135deg, var(--tint-light), transparent), var(--background-color) !important;
+        border: 1px solid rgba(13, 148, 136, 0.15) !important;
+        border-radius: 16px !important;
+        margin-bottom: 0.8rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        transition: transform 0.3s, box-shadow 0.3s;
     }
     [data-testid="stExpander"]:hover {
         transform: translateY(-2px);
-        box-shadow: var(--card-shadow-hover);
+        box-shadow: var(--glow-shadow);
+        border-color: rgba(13, 148, 136, 0.3) !important;
     }
     [data-testid="stExpander"] summary {
-        padding: 0.8rem 1.2rem;
-        border-radius: var(--radius-main);
+        padding: 1rem 1.5rem;
+        border-radius: 16px;
         background: transparent !important;
     }
     details[open] > summary {
-        border-bottom: 1px solid var(--divider-color);
-        background: rgba(128, 128, 128, 0.05) !important;
+        border-bottom: 1px solid rgba(13, 148, 136, 0.15);
+        background: rgba(13, 148, 136, 0.03) !important;
     }
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary span,
     details[open] > summary p,
     details[open] > summary span {
-        color: var(--text-main) !important;
-        font-weight: 700 !important;
-        font-size: 1.05rem !important;
+        color: var(--text-color) !important;
+        font-weight: 800 !important;
+        font-size: 1.1rem !important;
     }
     [data-testid="stExpander"] summary svg {
-        fill: var(--accent-primary) !important;
+        fill: var(--primary-color) !important;
     }
 
-    /* === 익스팬더/마크다운 텍스트 가시성 === */
+    /* === 텍스트 강제 시인성 확보 === */
     [data-testid="stMarkdownContainer"],
     [data-testid="stMarkdownContainer"] p,
     [data-testid="stMarkdownContainer"] li,
@@ -395,76 +405,88 @@ st.markdown(
     [data-testid="stMarkdownContainer"] h2,
     [data-testid="stMarkdownContainer"] h3,
     [data-testid="stMarkdownContainer"] h4 {
-        color: var(--text-main) !important;
+        color: var(--text-color) !important;
     }
 
-    /* === 셀렉트 / 라디오 / 인풋 레이블 === */
+    /* === 글로벌 폼 요소 레이블 === */
     .stSelectbox label,
     .stRadio label,
     .stCheckbox label,
     .stTextInput label,
     .stDateInput label,
     .stNumberInput label {
-        color: var(--text-main) !important;
-        font-weight: 700 !important;
+        color: var(--text-color) !important;
+        font-weight: 800 !important;
         font-size: 0.95rem !important;
+        letter-spacing: 0.2px;
     }
 
-    /* === 셀렉트박스 === */
+    /* === 셀렉트박스 (Glow Focus) === */
     [data-testid="stSelectbox"] > div > div {
-        background: var(--input-bg) !important;
-        border: 1px solid var(--divider-color) !important;
-        border-radius: calc(var(--radius-main) - 4px) !important;
-        color: var(--text-main) !important;
+        background: linear-gradient(rgba(255,255,255,0.02), rgba(255,255,255,0.02)), var(--background-color) !important;
+        border: 1px solid rgba(13, 148, 136, 0.3) !important;
+        border-radius: 12px !important;
+        color: var(--text-color) !important;
+        transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    [data-testid="stSelectbox"] > div > div:focus-within {
+        border-color: var(--primary-color) !important;
+        box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2) !important;
     }
     [data-testid="stSelectbox"] > div > div > div {
-        color: var(--text-main) !important;
+        color: var(--text-color) !important;
+        font-weight: 600 !important;
     }
     [data-testid="stSelectbox"] ul {
-        background: var(--card-bg) !important;
-        border: 1px solid var(--divider-color) !important;
-        box-shadow: var(--card-shadow-hover) !important;
+        background: var(--background-color) !important;
+        border: 1px solid rgba(13, 148, 136, 0.3) !important;
+        box-shadow: var(--glow-shadow-hover) !important;
+        border-radius: 12px !important;
     }
     [data-testid="stSelectbox"] li {
-        color: var(--text-main) !important;
+        color: var(--text-color) !important;
         font-weight: 500 !important;
+        padding: 8px 12px !important;
     }
     [data-testid="stSelectbox"] li:hover {
-        background: var(--sidebar-bg) !important;
-        opacity: 0.9;
+        background: var(--primary-color) !important;
+        color: #ffffff !important;
     }
 
     /* === 라디오 버튼 === */
     [data-testid="stRadio"] > div { background: transparent !important; }
-    [data-testid="stRadio"] label { color: var(--text-main) !important; }
-    [data-testid="stRadio"] span { color: var(--text-main) !important; opacity: 0.8 !important; font-weight: 500 !important; }
+    [data-testid="stRadio"] label { color: var(--text-color) !important; }
+    [data-testid="stRadio"] span { color: var(--text-color) !important; opacity: 0.85 !important; font-weight: 600 !important; }
 
-    /* === 2차(보조) 버튼 === */
+    /* === 2차(보조) 다운로드 버튼 (Hollow Fill Animation) === */
     [data-testid="stDownloadButton"] > button,
     [data-testid="stFormSubmitButton"] > button {
-        background: var(--card-bg) !important;
-        border: 2px solid var(--divider-color) !important;
-        color: var(--text-main) !important;
-        border-radius: var(--radius-main) !important;
-        font-weight: 700 !important;
-        transition: all 0.2s;
+        background: transparent !important;
+        border: 2px solid var(--primary-color) !important;
+        color: var(--primary-color) !important;
+        border-radius: 12px !important;
+        font-weight: 800 !important;
+        padding: 0.6rem 1.6rem !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: none !important;
     }
     [data-testid="stDownloadButton"] > button:hover,
     [data-testid="stFormSubmitButton"] > button:hover {
-        background: var(--sidebar-bg) !important;
-        color: var(--accent-primary) !important;
-        border-color: var(--accent-primary) !important;
-        transform: translateY(-2px);
+        background: var(--primary-color) !important;
+        color: #ffffff !important;
+        box-shadow: 0 6px 16px rgba(13, 148, 136, 0.4) !important;
+        transform: translateY(-2px) !important;
     }
 
-    /* === 메트릭 (st.metric) === */
-    [data-testid="stMetricLabel"] { color: var(--text-main) !important; opacity: 0.7 !important; font-weight: 600 !important; font-size: 0.95rem !important; }
+    /* === 핵심 메트릭스 수치 (Glow) === */
+    [data-testid="stMetricLabel"] { color: var(--text-color) !important; opacity: 0.75 !important; font-weight: 700 !important; font-size: 1rem !important; text-transform: uppercase; letter-spacing: 0.5px;}
     [data-testid="stMetricValue"] { 
         background: var(--kpi-gradient);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-weight: 800 !important; 
-        font-size: 2.2rem !important;
+        font-weight: 900 !important; 
+        font-size: 2.4rem !important;
+        text-shadow: 0 4px 12px rgba(13, 148, 136, 0.15);
     }
     </style>
     """,
