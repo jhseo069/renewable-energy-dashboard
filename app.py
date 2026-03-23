@@ -140,38 +140,33 @@ st.markdown(
     """
     <style>
     /*
-      [Premium Dynamic Theme - "Wow!" Edition (가독성 극대화 버전)]
-      - 투명도(opacity) 및 과도한 텍스트 쉐도우 제거로 글씨 시인성 200% 확보
-      - 폰트 웨이트(굵기) 상향 및 링크(a 태그) 명도 대비 강화
+      [Premium Dynamic Theme - "Wow!" Edition (가독성 완전 해결 버전)]
+      - 버튼의 기본 형태가 흰색/흰글씨 동기화되는 specificity 문제 완전히 고침
     */
     
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
 
-    /* === 전역 CSS 변수 (Streamlit 네이티브 속성 매핑) === */
+    /* === 전역 CSS 변수 === */
     :root {
         --tint-strong: rgba(13, 148, 136, 0.08);
         --tint-light: rgba(13, 148, 136, 0.03);
         --glow-shadow: 0 4px 20px rgba(13, 148, 136, 0.1);
         --glow-shadow-hover: 0 8px 32px rgba(13, 148, 136, 0.2);
-        /* 화이트 텍스트 시인성을 위해 더 진한 파란색 계열로 그라데이션 그을림 */
         --kpi-gradient: linear-gradient(135deg, var(--primary-color), #0284c7); 
         --border-color: rgba(128, 128, 128, 0.25);
     }
 
-    /* === 전체 폰트 적용 === */
     html, body, [class*="css"] {
         font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
         font-weight: 500;
         color: var(--text-color);
     }
 
-    /* === Glow Aura 배경 === */
     .stApp {
         background-image: radial-gradient(circle at 50% -10%, rgba(13, 148, 136, 0.12) 0%, transparent 60%);
         background-attachment: fixed;
     }
 
-    /* === 상단 헤더 & 네온 아우라 === */
     .main-header {
         color: var(--text-color);
         background: none;
@@ -203,13 +198,11 @@ st.markdown(
         letter-spacing: 0.5px;
     }
 
-    /* === 사이드바 (Smart Tint) === */
     [data-testid="stSidebar"] {
         background: linear-gradient(135deg, var(--tint-strong), var(--tint-light)), var(--secondary-background-color) !important;
         border-right: 1px solid var(--border-color);
     }
 
-    /* === 탭 스타일 (시인성 강화) === */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         justify-content: center;
@@ -220,8 +213,8 @@ st.markdown(
     .stTabs [data-baseweb="tab"] {
         border-radius: 8px;
         padding: 10px 24px;
-        font-weight: 700; /* 더 굵게 */
-        color: var(--text-color); /* 투명도 제거 */
+        font-weight: 700; 
+        color: var(--text-color); 
         transition: all 0.2s;
     }
     .stTabs [data-baseweb="tab"]:hover {
@@ -236,7 +229,6 @@ st.markdown(
         transform: translateY(-2px);
     }
 
-    /* === 일반 카드 (Smart Glass) === */
     .card {
         background: linear-gradient(135deg, var(--tint-light), transparent), var(--background-color);
         border: 1px solid rgba(13, 148, 136, 0.25);
@@ -255,12 +247,10 @@ st.markdown(
         z-index: 10;
         position: relative;
     }
-    /* 카드 내 텍스트 투명도 완전 제거 및 굵기 강화 */
     .card h4 { color: var(--text-color); margin-bottom: 0.8rem; font-weight: 800; font-size: 1.25rem; letter-spacing: -0.3px; }
     .card p  { color: var(--text-color); font-size: 1rem; line-height: 1.7; font-weight: 500; }
     .card .meta { color: var(--primary-color); font-size: 0.9rem; margin-bottom: 0.6rem; font-weight: 800; letter-spacing: 0.2px; text-transform: uppercase; }
 
-    /* === 예정 기능 안내 카드 === */
     .coming-card {
         background: transparent;
         border: 2px dashed rgba(13, 148, 136, 0.5);
@@ -272,7 +262,6 @@ st.markdown(
     .coming-card p  { color: var(--text-color); font-size: 1rem; line-height: 1.6; margin: 0; font-weight: 600;}
     .coming-card ul { color: var(--text-color); font-size: 1rem; line-height: 1.8; padding-left: 1.2rem; margin: 0.5rem 0 0 0; font-weight: 500;}
 
-    /* === KPI 카드 === */
     .kpi-card {
         position: relative;
         background: linear-gradient(var(--background-color), var(--background-color)) padding-box,
@@ -292,12 +281,11 @@ st.markdown(
     .kpi-card .value {
         font-size: 2.6rem;
         font-weight: 900;
-        color: var(--primary-color); /* 그라데이션이 가독성을 해칠 수 있어 솔리드 톤으로 고정 */
+        color: var(--primary-color);
         letter-spacing: -1px;
     }
     .kpi-card .label { color: var(--text-color); font-size: 1rem; margin-top: 0.6rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
 
-    /* === 섹션 타이틀 === */
     .section-title {
         color: var(--text-color);
         font-size: 1.3rem;
@@ -308,7 +296,6 @@ st.markdown(
         letter-spacing: -0.3px;
     }
 
-    /* === 상태 배지 === */
     .badge {
         display: inline-block;
         padding: 6px 14px;
@@ -318,35 +305,55 @@ st.markdown(
         margin-bottom: 8px;
         letter-spacing: 0.3px;
     }
-    /* 라이트/다크 양쪽에서 잘 보이도록 채도 상향 */
     .badge-ready   { background: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #22c55e; }
     .badge-pending { background: rgba(234, 179, 8, 0.15); color: #ca8a04; border: 1px solid #eab308; }
     .badge-plan    { background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid #0ea5e9; }
 
-    /* === 강력한 액션 버튼 === */
-    .stButton>button {
-        background: var(--primary-color) !important; /* 그라데이션 대신 솔리드 컬러로 텍스트 대비 확보 */
+    /* === 강력한 액션 버튼 (오류 전면 수정) === */
+    /* Streamlit의 다양한 버튼 렌더링 testid를 모두 붙잡아 강제 오버라이딩 처리 */
+    button[data-testid="baseButton-secondary"],
+    button[data-testid="baseButton-primary"],
+    .stButton > button {
+        background-color: var(--primary-color) !important; 
         color: #ffffff !important;
         border: none !important;
         border-radius: 10px !important;
         font-weight: 800 !important;
         font-size: 1rem !important;
         padding: 0.8rem 1.8rem !important;
-        transition: transform 0.2s, box-shadow 0.2s !important;
+        transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s !important;
         box-shadow: 0 4px 10px rgba(13, 148, 136, 0.3) !important;
     }
-    .stButton>button:hover {
+    button[data-testid="baseButton-secondary"]:hover,
+    button[data-testid="baseButton-primary"]:hover,
+    .stButton > button:hover {
         transform: translateY(-2px) !important;
         box-shadow: 0 6px 16px rgba(13, 148, 136, 0.4) !important;
-        background: #0f766e !important;
+        background-color: #0f766e !important;
         color: #ffffff !important;
     }
 
-    /* === 비활성화 버튼 (Disabled) 스타일 보정 === */
-    .stButton>button[disabled] {
-        background: rgba(128, 128, 128, 0.2) !important;
+    /* 버튼 내 p태그 텍스트 색상 강제 지정 */
+    button[data-testid="baseButton-secondary"] p,
+    button[data-testid="baseButton-primary"] p,
+    .stButton > button p {
+        color: #ffffff !important;
+        font-weight: 800 !important;
+    }
+
+    /* === 비활성화 버튼 (Disabled) === */
+    button[data-testid="baseButton-secondary"][disabled],
+    button[data-testid="baseButton-primary"][disabled],
+    .stButton > button[disabled] {
+        background-color: rgba(128, 128, 128, 0.2) !important;
         color: var(--text-color) !important;
         box-shadow: none !important;
+        opacity: 0.6 !important;
+    }
+    button[data-testid="baseButton-secondary"][disabled] p,
+    button[data-testid="baseButton-primary"][disabled] p,
+    .stButton > button[disabled] p {
+        color: var(--text-color) !important;
     }
 
     /* === 입력 폼 === */
@@ -364,7 +371,6 @@ st.markdown(
         box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.3);
     }
 
-    /* === 익스팬더 플로팅 디자인 === */
     [data-testid="stExpander"] {
         background: linear-gradient(135deg, var(--tint-light), transparent), var(--background-color) !important;
         border: 1px solid rgba(13, 148, 136, 0.25) !important;
@@ -396,7 +402,6 @@ st.markdown(
         fill: var(--primary-color) !important;
     }
 
-    /* === 텍스트 강제 시인성 확보 및 하이퍼링크(a) 색상 교정 === */
     [data-testid="stMarkdownContainer"],
     [data-testid="stMarkdownContainer"] p,
     [data-testid="stMarkdownContainer"] li,
@@ -409,19 +414,17 @@ st.markdown(
         color: var(--text-color) !important;
     }
     
-    /* 링크(a) 텍스트 명시적 스타일링 */
     [data-testid="stMarkdownContainer"] a {
-        color: #0284c7 !important; /* 가독성을 위해 명확한 짙은 파란색으로 고정 */
+        color: #0284c7 !important; 
         font-weight: 800 !important;
         text-decoration: underline !important;
     }
     @media (prefers-color-scheme: dark) {
         [data-testid="stMarkdownContainer"] a {
-            color: #38bdf8 !important; /* 다크모드에서는 밝은 하늘색 */
+            color: #38bdf8 !important; 
         }
     }
 
-    /* === 글로벌 폼 요소 레이블 === */
     .stSelectbox label,
     .stRadio label,
     .stCheckbox label,
@@ -434,7 +437,6 @@ st.markdown(
         letter-spacing: 0.2px;
     }
 
-    /* === 셀렉트박스 === */
     [data-testid="stSelectbox"] > div > div {
         background: linear-gradient(rgba(255,255,255,0.02), rgba(255,255,255,0.02)), var(--background-color) !important;
         border: 1px solid rgba(13, 148, 136, 0.4) !important;
@@ -450,15 +452,14 @@ st.markdown(
         font-weight: 700 !important;
     }
 
-    /* === 라디오 버튼 === */
     [data-testid="stRadio"] > div { background: transparent !important; }
     [data-testid="stRadio"] label { color: var(--text-color) !important; }
     [data-testid="stRadio"] span { color: var(--text-color) !important; font-weight: 700 !important; }
 
-    /* === 2차(보조) 다운로드 버튼 === */
-    [data-testid="stDownloadButton"] > button,
-    [data-testid="stFormSubmitButton"] > button {
-        background: transparent !important;
+    /* === 보조 버튼 다운로드/제출 === */
+    button[data-testid="baseButton-secondaryFormSubmit"],
+    [data-testid="stDownloadButton"] > button {
+        background-color: transparent !important;
         border: 2px solid var(--primary-color) !important;
         color: var(--primary-color) !important;
         border-radius: 10px !important;
@@ -467,18 +468,17 @@ st.markdown(
         transition: all 0.2s ease !important;
         box-shadow: none !important;
     }
-    [data-testid="stDownloadButton"] > button:hover,
-    [data-testid="stFormSubmitButton"] > button:hover {
-        background: var(--primary-color) !important;
+    button[data-testid="baseButton-secondaryFormSubmit"]:hover,
+    [data-testid="stDownloadButton"] > button:hover {
+        background-color: var(--primary-color) !important;
         color: #ffffff !important;
         box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3) !important;
         transform: translateY(-2px) !important;
     }
 
-    /* === 핵심 메트릭스 수치 === */
     [data-testid="stMetricLabel"] { color: var(--text-color) !important; font-weight: 800 !important; font-size: 1.05rem !important; text-transform: uppercase;}
     [data-testid="stMetricValue"] { 
-        color: var(--primary-color) !important; /* 그라데이션 대신 솔리드 틸 컬러로 확실한 가독성 보장 */
+        color: var(--primary-color) !important; 
         font-weight: 900 !important; 
         font-size: 2.6rem !important;
     }
