@@ -309,8 +309,11 @@ st.markdown(
     .badge-pending { background: rgba(234, 179, 8, 0.15); color: #ca8a04; border: 1px solid #eab308; }
     .badge-plan    { background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid #0ea5e9; }
 
-    /* === 강력한 액션 버튼 (오류 전면 수정) === */
-    /* Streamlit의 다양한 버튼 렌더링 testid를 모두 붙잡아 강제 오버라이딩 처리 */
+    /* === 강력한 액션 버튼 (완벽 타겟팅) === */
+    /* Streamlit의 다양한 버전(1.20 ~ 1.35+)에서의 버튼 DOM 속성 모조리 포위 */
+    button[kind="secondary"],
+    button[kind="primary"],
+    div[data-testid="stButton"] button,
     button[data-testid="baseButton-secondary"],
     button[data-testid="baseButton-primary"],
     .stButton > button {
@@ -324,6 +327,9 @@ st.markdown(
         transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s !important;
         box-shadow: 0 4px 10px rgba(13, 148, 136, 0.3) !important;
     }
+    button[kind="secondary"]:hover,
+    button[kind="primary"]:hover,
+    div[data-testid="stButton"] button:hover,
     button[data-testid="baseButton-secondary"]:hover,
     button[data-testid="baseButton-primary"]:hover,
     .stButton > button:hover {
@@ -333,7 +339,9 @@ st.markdown(
         color: #ffffff !important;
     }
 
-    /* 버튼 내 p태그 텍스트 색상 강제 지정 */
+    button[kind="secondary"] p,
+    button[kind="primary"] p,
+    div[data-testid="stButton"] button p,
     button[data-testid="baseButton-secondary"] p,
     button[data-testid="baseButton-primary"] p,
     .stButton > button p {
@@ -342,6 +350,9 @@ st.markdown(
     }
 
     /* === 비활성화 버튼 (Disabled) === */
+    button[kind="secondary"][disabled],
+    button[kind="primary"][disabled],
+    div[data-testid="stButton"] button[disabled],
     button[data-testid="baseButton-secondary"][disabled],
     button[data-testid="baseButton-primary"][disabled],
     .stButton > button[disabled] {
@@ -350,6 +361,9 @@ st.markdown(
         box-shadow: none !important;
         opacity: 0.6 !important;
     }
+    button[kind="secondary"][disabled] p,
+    button[kind="primary"][disabled] p,
+    div[data-testid="stButton"] button[disabled] p,
     button[data-testid="baseButton-secondary"][disabled] p,
     button[data-testid="baseButton-primary"][disabled] p,
     .stButton > button[disabled] p {
