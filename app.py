@@ -140,68 +140,35 @@ st.markdown(
     """
     <style>
     /*
-      [Dual Theme 적용 - Light: Corporate & Glass / Dark: Neo Brutalism]
-      OS/브라우저의 라이트/다크 모드 설정에 반응하여 자동으로 두 가지 테마가 전환됩니다.
-      - Light Mode: 프리텐다드 폰트와 포인트 라인, 은은한 블러 쉐도우를 통한 모던 기업형 UI
-      - Dark Mode: 네오 브루탈리즘 스타일을 가미한 뚜렷한 경계선 및 고대비 색상으로 차별화
+      [완전 연동형 Dual Theme (Streamlit 기본 테마 토글 100% 대응)]
+      - Light Mode: .streamlit/config.toml 에 정의된 색상을 기반으로 Corporate & Glass 스타일 렌더링
+      - Dark Mode: Streamlit의 자체 Dark Mode 변수를 찾아 자연스럽게 반전 (CSS 변수 매핑)
     */
     
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
 
-    /* CSS 변수 선언 (기본 라이트 모드) */
+    /* CSS 변수 선언 (Streamlit Native 변수를 우리 구조에 맵핑) */
     :root {
-        --app-bg: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        --sidebar-bg: #e2e8f0;
-        --card-bg: rgba(255, 255, 255, 0.9);
-        --card-border: 1px solid #cbd5e1;
-        --card-border-top: 4px solid #0d9488;
-        --card-shadow: 0 4px 12px rgba(13, 148, 136, 0.05);
-        --card-shadow-hover: 0 8px 24px rgba(13, 148, 136, 0.12);
-        --card-hover-transform: translateY(-4px) scale(1.01);
-        --text-main: #1e293b;
-        --text-sub: #475569;
-        --accent-primary: #0d9488;
-        --accent-hover: #0f766e;
-        --kpi-gradient: linear-gradient(135deg, #0d9488, #10b981);
-        --radius-main: 16px;
-        --divider-color: #cbd5e1;
-        --input-bg: #ffffff;
+        --app-bg: var(--background-color);
+        --sidebar-bg: var(--secondary-background-color);
+        --card-bg: var(--background-color);
+        
+        --card-border: 1px solid rgba(128, 128, 128, 0.2);
+        --card-border-top: 3px solid var(--primary-color);
+        --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        --card-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.15);
+        --card-hover-transform: translateY(-4px);
+        
+        --text-main: var(--text-color);
+        --text-sub: var(--text-color);
+        --accent-primary: var(--primary-color);
+        --accent-hover: var(--primary-color);
+        --kpi-gradient: linear-gradient(135deg, var(--primary-color), #38bdf8);
+        --radius-main: 12px;
+        --divider-color: rgba(128, 128, 128, 0.2);
+        --input-bg: var(--background-color);
+        
         --btn-text: #ffffff;
-        --badge-ready-bg: rgba(34, 197, 94, 0.2);
-        --badge-ready-text: #16a34a;
-        --badge-pending-bg: rgba(234, 179, 8, 0.2);
-        --badge-pending-text: #ca8a04;
-        --badge-plan-bg: rgba(14, 165, 233, 0.2);
-        --badge-plan-text: #0284c7;
-    }
-
-    /* CSS 변수 선언 (다크 모드 감지 시 - Neo Brutalism 스타일 적용) */
-    @media (prefers-color-scheme: dark) {
-        :root {
-            --app-bg: #0f172a;
-            --sidebar-bg: #1e293b;
-            --card-bg: #1e293b;
-            --card-border: 2px solid #334155;
-            --card-border-top: 4px solid #38bdf8;
-            --card-shadow: 5px 5px 0px #0ea5e9;
-            --card-shadow-hover: 8px 8px 0px #38bdf8;
-            --card-hover-transform: translate(-3px, -3px);
-            --text-main: #f8fafc;
-            --text-sub: #94a3b8;
-            --accent-primary: #0284c7;
-            --accent-hover: #0369a1;
-            --kpi-gradient: linear-gradient(135deg, #38bdf8, #818cf8);
-            --radius-main: 10px;
-            --divider-color: #334155;
-            --input-bg: #0f172a;
-            --btn-text: #f8fafc;
-            --badge-ready-bg: rgba(74, 222, 128, 0.2);
-            --badge-ready-text: #4ade80;
-            --badge-pending-bg: rgba(250, 204, 21, 0.2);
-            --badge-pending-text: #facc15;
-            --badge-plan-bg: rgba(56, 189, 248, 0.2);
-            --badge-plan-text: #38bdf8;
-        }
     }
 
     /* === 전체 폰트 및 구조 === */
@@ -210,7 +177,7 @@ st.markdown(
     }
 
     .stApp {
-        background: var(--app-bg) !important;
+        /* background 속성을 비워둠으로써 Native toggle 을 완벽히 수용함 */
     }
 
     /* === 상단 헤더 === */
@@ -238,6 +205,7 @@ st.markdown(
     .sub-header {
         text-align: center;
         color: var(--text-sub);
+        opacity: 0.8;
         font-size: 1rem;
         margin-bottom: 2rem;
         font-weight: 500;
@@ -256,33 +224,35 @@ st.markdown(
         padding: 10px 24px;
         font-weight: 600;
         color: var(--text-sub);
+        opacity: 0.7;
     }
     .stTabs [aria-selected="true"] {
         background: var(--accent-primary) !important;
         color: var(--btn-text) !important;
         font-weight: 700;
+        opacity: 1;
         box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     }
 
     /* === 카드 전용 === */
     .card {
         background: var(--card-bg);
-        backdrop-filter: blur(12px);
         border: var(--card-border);
         border-top: var(--card-border-top);
         border-radius: var(--radius-main);
         padding: 1.6rem;
         margin-bottom: 1.2rem;
         box-shadow: var(--card-shadow);
-        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: transform 0.25s, box-shadow 0.25s;
     }
     .card:hover {
         transform: var(--card-hover-transform);
         box-shadow: var(--card-shadow-hover);
         z-index: 10;
+        position: relative;
     }
     .card h4 { color: var(--text-main); margin-bottom: 0.5rem; font-weight: 700; font-size: 1.15rem; letter-spacing: -0.3px; }
-    .card p  { color: var(--text-sub); font-size: 0.95rem; line-height: 1.6; }
+    .card p  { color: var(--text-main); opacity: 0.85; font-size: 0.95rem; line-height: 1.6; }
     .card .meta { color: var(--accent-primary); font-size: 0.8rem; margin-bottom: 0.4rem; font-weight: 600; letter-spacing: 0.2px; }
 
     /* === 예정 기능 안내 카드 === */
@@ -294,8 +264,8 @@ st.markdown(
         margin-bottom: 1rem;
     }
     .coming-card h4 { color: var(--accent-primary); margin-bottom: 0.5rem; font-size: 1.05rem; font-weight: 700; }
-    .coming-card p  { color: var(--text-sub); font-size: 0.92rem; line-height: 1.6; margin: 0; }
-    .coming-card ul { color: var(--text-sub); font-size: 0.92rem; line-height: 1.8; padding-left: 1.2rem; margin: 0.5rem 0 0 0; }
+    .coming-card p  { color: var(--text-main); opacity: 0.8; font-size: 0.92rem; line-height: 1.6; margin: 0; }
+    .coming-card ul { color: var(--text-main); opacity: 0.8; font-size: 0.92rem; line-height: 1.8; padding-left: 1.2rem; margin: 0.5rem 0 0 0; }
 
     /* === KPI 카드 === */
     .kpi-card {
@@ -320,7 +290,7 @@ st.markdown(
         -webkit-text-fill-color: transparent;
         letter-spacing: -1px;
     }
-    .kpi-card .label { color: var(--text-sub); font-size: 0.9rem; margin-top: 0.4rem; font-weight: 600; }
+    .kpi-card .label { color: var(--text-main); opacity: 0.8; font-size: 0.9rem; margin-top: 0.4rem; font-weight: 600; }
 
     /* === 섹션 타이틀 === */
     .section-title {
@@ -343,9 +313,9 @@ st.markdown(
         margin-bottom: 6px;
         letter-spacing: 0.2px;
     }
-    .badge-ready   { background: var(--badge-ready-bg); color: var(--badge-ready-text); }
-    .badge-pending { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
-    .badge-plan    { background: var(--badge-plan-bg); color: var(--badge-plan-text); }
+    .badge-ready   { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+    .badge-pending { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+    .badge-plan    { background: rgba(14, 165, 233, 0.15); color: #0ea5e9; }
 
     /* === 사이드바 === */
     [data-testid="stSidebar"] {
@@ -361,13 +331,13 @@ st.markdown(
         border-radius: var(--radius-main);
         font-weight: 700;
         padding: 0.6rem 1.6rem;
-        transition: all 0.2s;
+        transition: transform 0.2s, filter 0.2s, box-shadow 0.2s;
         box-shadow: 0 2px 6px rgba(0,0,0,0.1);
         letter-spacing: -0.2px;
     }
     .stButton>button:hover {
-        background: var(--accent-hover);
         color: var(--btn-text);
+        filter: brightness(0.9);
         transform: translateY(-2px);
         box-shadow: 0 6px 16px rgba(0,0,0,0.15);
     }
@@ -401,10 +371,7 @@ st.markdown(
     }
     details[open] > summary {
         border-bottom: 1px solid var(--divider-color);
-        background: rgba(0,0,0,0.02) !important;
-    }
-    @media (prefers-color-scheme: dark) {
-        details[open] > summary { background: rgba(255,255,255,0.02) !important; }
+        background: rgba(128, 128, 128, 0.05) !important;
     }
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary span,
@@ -454,14 +421,9 @@ st.markdown(
         color: var(--text-main) !important;
     }
     [data-testid="stSelectbox"] ul {
-        background: var(--input-bg) !important;
+        background: var(--card-bg) !important;
         border: 1px solid var(--divider-color) !important;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
-    }
-    @media (prefers-color-scheme: dark) {
-        [data-testid="stSelectbox"] ul {
-            box-shadow: 4px 4px 0px #0ea5e9 !important;
-        }
+        box-shadow: var(--card-shadow-hover) !important;
     }
     [data-testid="stSelectbox"] li {
         color: var(--text-main) !important;
@@ -469,12 +431,13 @@ st.markdown(
     }
     [data-testid="stSelectbox"] li:hover {
         background: var(--sidebar-bg) !important;
+        opacity: 0.9;
     }
 
     /* === 라디오 버튼 === */
     [data-testid="stRadio"] > div { background: transparent !important; }
     [data-testid="stRadio"] label { color: var(--text-main) !important; }
-    [data-testid="stRadio"] span { color: var(--text-sub) !important; font-weight: 500 !important; }
+    [data-testid="stRadio"] span { color: var(--text-main) !important; opacity: 0.8 !important; font-weight: 500 !important; }
 
     /* === 2차(보조) 버튼 === */
     [data-testid="stDownloadButton"] > button,
@@ -495,7 +458,7 @@ st.markdown(
     }
 
     /* === 메트릭 (st.metric) === */
-    [data-testid="stMetricLabel"] { color: var(--text-sub) !important; font-weight: 600 !important; font-size: 0.95rem !important; }
+    [data-testid="stMetricLabel"] { color: var(--text-main) !important; opacity: 0.7 !important; font-weight: 600 !important; font-size: 0.95rem !important; }
     [data-testid="stMetricValue"] { 
         background: var(--kpi-gradient);
         -webkit-background-clip: text;
