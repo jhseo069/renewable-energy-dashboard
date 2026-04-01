@@ -712,7 +712,7 @@ def _generate_newsletter_html(
 
     return f"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="UTF-8">
-<title>Renewable Energy Monday Vol.{vol}</title>
+<title>Renewable Energy Daily Vol.{vol}</title>
 <style>
   body{{font-family:'맑은 고딕','Malgun Gothic',sans-serif;margin:0;padding:20px;background:#f0f0f0;color:#333;}}
   .wrap{{max-width:760px;margin:0 auto;background:#fff;}}
@@ -748,7 +748,7 @@ def _generate_newsletter_html(
       <div class="logo">KCH</div>
       <div class="iss">Daily Renewable Energy Issue<br>{issue_date_str} Vol. {vol}</div>
     </div>
-    <div class="ttl">Renewable Energy Monday</div>
+    <div class="ttl">Renewable Energy Daily</div>
   </div>
 
   <div class="sec">
@@ -976,7 +976,7 @@ with st.sidebar:
             st.success("✅ 생성 완료! 아래 버튼으로 다운로드하세요.")
 
         if "nl_generated_html" in st.session_state:
-            _fname = f"{get_kst_now().strftime('%Y-%m-%d')}_RE_Monday_Vol{st.session_state.get('nl_vol',1)}.html"
+            _fname = f"{get_kst_now().strftime('%Y-%m-%d')}_RE_Daily_Vol{st.session_state.get('nl_vol',1)}.html"
             st.download_button(
                 label="📥 HTML 다운로드",
                 data=st.session_state["nl_generated_html"].encode("utf-8"),
