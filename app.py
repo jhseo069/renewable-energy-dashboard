@@ -1569,23 +1569,18 @@ with tab3:
         raw_bills          = _fetch_assembly_bills()
         bills              = _filter_by_period(raw_bills, policy_period, date_key="propose_date")
 
-    # ── 9:00 AM KST 일별 표시 필터 ────────────────────────────────────
-    # 오전 9:00 이전에 등록된 보도자료는 화면에서 숨깁니다 (Google Sheets에 영구 보존).
-    _p_now  = get_kst_now()
-    _p_900  = datetime.combine(_p_now.date(), dtime(9, 0))
-    _p_display_cutoff = _p_900 if _p_now >= _p_900 else _p_900 - timedelta(days=1)
-    _p_cutoff_str     = _p_display_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
-    display_press     = [a for a in all_press_articles if a.get("added_at", "") >= _p_cutoff_str]
-    press_hidden_count = len(all_press_articles) - len(display_press)
+    # ── 오늘(자정 기준) 일별 표시 필터 ────────────────────────────────────
+    # 오늘 00:00 KST 이후 등록분을 기본 표시합니다 (Google Sheets에 영구 보존).
+    _p_now        = get_kst_now()
+    _p_cutoff_str = _p_now.strftime("%Y-%m-%d") + "T00:00:00"
+    _p_today      = [a for a in all_press_articles if a.get("added_at", "") >= _p_cutoff_str]
+    press_hidden_count = len(all_press_articles) - len(_p_today)
 
-    # 화면 표시: 9:00 필터 적용 후 기간 필터
+    # "이전 보도자료 보기" 체크박스 토글 반영
+    display_press = all_press_articles if st.session_state.get("show_old_press") else _p_today
+
+    # 화면 표시: 오늘(또는 전체) 필터 적용 후 기간 필터
     rss_articles = _filter_by_period(display_press, policy_period, date_key="date")
-
-    if press_hidden_count > 0:
-        st.info(
-            f"📦 오전 9:00 이전 보도자료 **{press_hidden_count}건**은 보관 처리되어 숨겨졌습니다. "
-            f"(Google Sheets에 영구 저장됨)"
-        )
 
     # ── 통합 CSV 다운로드 버튼 (Tab 2와 동일한 방식 — 상단 1개) ──────
     today_str = get_kst_now().strftime("%Y-%m-%d")
@@ -1831,6 +1826,14 @@ with tab3:
                 "위 **'➕ 보도자료 추가하기'** 를 클릭하여 직접 입력하세요."
             )
 
+        # ── 이전 보도자료 보기 토글 ────────────────────────────────────
+        if press_hidden_count > 0:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.checkbox(
+                f"📦 이전 보도자료 {press_hidden_count}건 함께 보기 (어제 이전 등록분)",
+                key="show_old_press",
+            )
+
     # ── 오른쪽: 국회 법안 ─────────────────────────────────────────────
     with col_law:
         st.markdown('<p class="section-title">🏛️ 국회 법안 동향 (신재생)</p>', unsafe_allow_html=True)
@@ -1935,21 +1938,15 @@ with tab4:
     # ── 공지사항 데이터 로드 ─────────────────────────────────────────────
     all_notices = _load_notices()
 
-    # ── 9:00 AM KST 일별 표시 필터 ──────────────────────────────────────
-    # 오전 9:00 이전에 등록된 공지는 대시보드에서 숨깁니다.
-    # Google Sheets 및 data/notices.json에 영구 보존됩니다.
-    _now = get_kst_now()
-    _today_900 = datetime.combine(_now.date(), dtime(9, 0))
-    _display_cutoff = _today_900 if _now >= _today_900 else _today_900 - timedelta(days=1)
-    _cutoff_str     = _display_cutoff.strftime("%Y-%m-%dT%H:%M:%S")
-    display_notices = [n for n in all_notices if n.get("added_at", "") >= _cutoff_str]
-    archived_count  = len(all_notices) - len(display_notices)
+    # ── 오늘(자정 기준) 일별 표시 필터 ──────────────────────────────────────
+    # 오늘 00:00 KST 이후 등록분을 기본 표시합니다 (Google Sheets에 영구 보존).
+    _now        = get_kst_now()
+    _cutoff_str = _now.strftime("%Y-%m-%d") + "T00:00:00"
+    _today_notices = [n for n in all_notices if n.get("added_at", "") >= _cutoff_str]
+    archived_count = len(all_notices) - len(_today_notices)
 
-    if archived_count > 0:
-        st.info(
-            f"📦 오전 9:00 이전 공지 **{archived_count}건**은 보관 처리되어 숨겨졌습니다. "
-            f"(Google Sheets에 영구 저장됨)"
-        )
+    # "이전 공지사항 보기" 체크박스 토글 반영
+    display_notices = all_notices if st.session_state.get("show_old_notices") else _today_notices
 
     # ── 상단 컨트롤: 기관 필터 + 전체 CSV 다운로드 ─────────────────────
     col_n_filter, col_n_dl = st.columns([3, 2])
@@ -2231,6 +2228,14 @@ with tab4:
                             ]
                             _save_notices(all_notices)
                             st.rerun()
+
+    # ── 이전 공지사항 보기 토글 ──────────────────────────────────────────
+    if archived_count > 0:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.checkbox(
+            f"📦 이전 공지사항 {archived_count}건 함께 보기 (어제 이전 등록분)",
+            key="show_old_notices",
+        )
 
     # ── 기관 홈페이지 안내 (하단) ────────────────────────────────────────
     st.markdown("---")
