@@ -1666,7 +1666,7 @@ with tab3:
                 pr_files = st.file_uploader(
                     "첨부파일 (PDF·HWP·DOCX·XLSX·PNG·JPG 등, 복수 선택 가능)",
                     accept_multiple_files=True,
-                    key="pr_form_files",
+                    key=f"pr_form_files_{st.session_state.get('pr_uploader_key', 0)}",
                 )
 
             if st.button("✅ 추가", key="pr_form_submit", use_container_width=False):
@@ -1699,6 +1699,11 @@ with tab3:
                     st.cache_data.clear()
                     att_msg = f" (첨부 {len(pr_saved_files)}개)" if pr_saved_files else ""
                     st.success(f"✅ 보도자료가 등록되었습니다: {pr_title.strip()}{att_msg}")
+                    # 폼 필드 초기화 (제목·링크·요약·파일업로더)
+                    for _k in ["pr_form_title", "pr_form_link", "pr_form_summary"]:
+                        if _k in st.session_state:
+                            del st.session_state[_k]
+                    st.session_state["pr_uploader_key"] = st.session_state.get("pr_uploader_key", 0) + 1
                     st.rerun()
 
         dept_icons = {
