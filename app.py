@@ -1584,8 +1584,10 @@ with tab3:
     # ── 오늘(자정 기준) 일별 표시 필터 ────────────────────────────────────
     # 오늘 00:00 KST 이후 등록분을 기본 표시합니다 (Google Sheets에 영구 보존).
     _p_now        = get_kst_now()
-    _p_cutoff_str = _p_now.strftime("%Y-%m-%d") + "T00:00:00"
-    _p_today      = [a for a in all_press_articles if a.get("added_at", "") >= _p_cutoff_str]
+    _p_today_str  = _p_now.strftime("%Y-%m-%d")
+    # added_at 형식이 "YYYY-MM-DDTHH:MM:SS"(수동) 또는 "YYYY-MM-DD HH:MM:SS"(RSS 자동수집) 혼재
+    # → startswith로 날짜 문자열 비교하여 형식 차이 무관하게 오늘 항목 필터
+    _p_today      = [a for a in all_press_articles if a.get("added_at", "").startswith(_p_today_str)]
     press_hidden_count = len(all_press_articles) - len(_p_today)
 
     # "이전 보도자료 보기" 체크박스 토글 반영
@@ -1958,8 +1960,10 @@ with tab4:
     # ── 오늘(자정 기준) 일별 표시 필터 ──────────────────────────────────────
     # 오늘 00:00 KST 이후 등록분을 기본 표시합니다 (Google Sheets에 영구 보존).
     _now        = get_kst_now()
-    _cutoff_str = _now.strftime("%Y-%m-%d") + "T00:00:00"
-    _today_notices = [n for n in all_notices if n.get("added_at", "") >= _cutoff_str]
+    _today_str  = _now.strftime("%Y-%m-%d")
+    # added_at 형식이 "YYYY-MM-DDTHH:MM:SS"(수동) 또는 "YYYY-MM-DD HH:MM:SS"(RSS/Sheets 자동) 혼재
+    # → startswith로 날짜 문자열 비교하여 형식 차이 무관하게 오늘 항목 필터
+    _today_notices = [n for n in all_notices if n.get("added_at", "").startswith(_today_str)]
     archived_count = len(all_notices) - len(_today_notices)
 
     # "이전 공지사항 보기" 체크박스 토글 반영
