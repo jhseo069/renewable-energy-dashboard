@@ -484,21 +484,33 @@ def _gs_archive(source_tab: str, old_items: list[dict]) -> None:
 
 
 def _load_press_releases() -> list[dict]:
-    """보도자료 로드: Google Sheets 우선 → JSON 폴백 (탭 없으면 자동 마이그레이션)."""
+    """보도자료 로드: 수동(press_releases) + 자동RSS(press_releases_rss) 합산 반환.
+
+    수동 항목: Google Sheets [press_releases] 탭 우선 → JSON 폴백
+    자동 항목: Google Sheets [press_releases_rss] 탭 (Apps Script 수집분)
+    source_type='auto' 로 구분 가능.
+    """
+    # ── 수동 항목 ──────────────────────────────────────────────────────
     gs = _gs_load("press_releases")
     if gs is not None:
-        return gs
-    # JSON 폴백
-    data: list[dict] = []
-    if _PRESS_FILE.exists():
-        try:
-            data = _json.loads(_PRESS_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    # Google Sheets 탭 미생성 + JSON에 데이터 있으면 자동 마이그레이션
-    if data and _gs_sheet_id():
-        _gs_save("press_releases", data)
-    return data
+        manual = gs
+    else:
+        manual = []
+        if _PRESS_FILE.exists():
+            try:
+                manual = _json.loads(_PRESS_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        if manual and _gs_sheet_id():
+            _gs_save("press_releases", manual)
+
+    # ── 자동 RSS 항목 (Apps Script → press_releases_rss 탭) ───────────
+    auto_rss = _gs_load("press_releases_rss") or []
+
+    # 합산 후 최신순 정렬 (added_at 기준)
+    combined = manual + auto_rss
+    combined.sort(key=lambda x: x.get("added_at", ""), reverse=True)
+    return combined
 
 
 def _save_press_releases(articles: list[dict]) -> None:
@@ -1781,6 +1793,11 @@ with tab3:
                                     f' &nbsp;<span style="color:#64ffda; font-size:0.78rem;">📎 {len(att_list)}개</span>'
                                     if att_list else ""
                                 )
+                                auto_badge = (
+                                    ' &nbsp;<span style="font-size:0.72rem; padding:0.1rem 0.4rem; '
+                                    'background:rgba(146,254,157,0.15); border-radius:4px; color:#92fe9d;">🤖 자동수집</span>'
+                                    if article.get("source_type") == "auto" else ""
+                                )
                                 summary_text = article.get("summary", "")
                                 summary_html = (
                                     f'<p>{summary_text[:150]}{"…" if len(summary_text) > 150 else ""}</p>'
@@ -1793,7 +1810,7 @@ with tab3:
                                 )
                                 html_str = (
                                     f'<div class="card" style="margin-bottom:0.5rem;">'
-                                    f'<p class="meta">🏢 {article["source"]} · {article["date"]}{cat_badge}{att_badge}</p>'
+                                    f'<p class="meta">🏢 {article["source"]} · {article["date"]}{cat_badge}{att_badge}{auto_badge}</p>'
                                     f'<h4 style="font-size:0.92rem;">{title_html}</h4>'
                                     f'{summary_html}'
                                     f'</div>'

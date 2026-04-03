@@ -47,12 +47,20 @@ data/
 
 ---
 
-## 데이터 영속성 구조 (v0.8.4)
+## 데이터 영속성 구조 (v0.8.5)
 
 - **우선순위**: Google Sheets → JSON 파일 (폴백)
 - `GSHEET_ID` + `[gcp_service_account]`를 Streamlit secrets에 설정하면 자동 활성화
 - `_gs_client()`: `gspread.service_account_from_dict()` 사용 (authorize() deprecated)
 - Cloud UI 입력 데이터는 Google Sheets에 영구 저장 (배포 재시작 무관)
+- `_gs_archive()`: 30일 초과 항목 → Sheets `archive` 탭 이동 (`notices`, `press_releases`만 해당)
+- SMP/REC는 아카이브 미적용 (가격 추이 분석용으로 전체 보존)
+
+## 표시 필터 규칙
+
+- **Tab 3/4 공통**: `added_at >= 오늘 9:00 KST` 기준 항목만 화면 표시
+- 숨겨진 항목은 Google Sheets에 보존, 숨김 건수 info 메시지로 안내
+- **CSV 다운로드**: 9:00 필터 미적용 — 기간 필터 기준 전체 포함
 
 ---
 
