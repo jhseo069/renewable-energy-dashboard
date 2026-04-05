@@ -114,6 +114,15 @@ def _fetch_attachments_cached(link: str) -> list[dict]:
 @st.cache_data(ttl=21600, show_spinner=False)
 def _fetch_assembly_bills() -> list[dict]:
     """국회 법안 수집 (6시간 캐시). API 키 없으면 Mock 반환."""
+    # Streamlit Cloud에서 os.getenv()가 실패할 경우 st.secrets 폴백
+    import execution.law_api as _law_mod
+    if not _law_mod.ASSEMBLY_API_KEY:
+        try:
+            key = st.secrets.get("ASSEMBLY_API_KEY", "")
+            if key:
+                _law_mod.ASSEMBLY_API_KEY = key
+        except Exception:
+            pass
     return fetch_all_bills()
 
 
@@ -552,20 +561,35 @@ def _save_notices(notices: list[dict]) -> None:
 
 
 def _load_smp_rec() -> list[dict]:
-    """SMP/REC 로드: Google Sheets 우선 → JSON 폴백 (탭 없으면 자동 마이그레이션)."""
+    """SMP/REC 로드: Sheets + JSON 병합 (date 기준 중복 제거, Sheets 우선).
+
+    Sheets 탭이 일부 데이터만 가진 경우(예: 컨테이너 재시작 후 신규 입력분만 저장)
+    git 추적 JSON의 과거 데이터와 합산하여 전체 추이를 복원한다.
+    """
     gs = _gs_load("smp_rec")
-    if gs is not None:
-        return gs
-    data: list[dict] = []
+    # JSON 데이터 로드 (git 추적 과거 데이터)
+    json_data: list[dict] = []
     if _SMP_REC_FILE.exists():
         try:
-            data = _json.loads(_SMP_REC_FILE.read_text(encoding="utf-8"))
+            json_data = _json.loads(_SMP_REC_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
-    # Google Sheets 탭 미생성 + JSON에 데이터 있으면 자동 마이그레이션
-    if data and _gs_sheet_id():
-        _gs_save("smp_rec", data)
-    return data
+
+    if gs is None:
+        # Sheets 미연동 → JSON만 사용, 마이그레이션 시도
+        if json_data and _gs_sheet_id():
+            _gs_save("smp_rec", json_data)
+        return json_data
+
+    # Sheets + JSON 병합: JSON 기준으로 채우고 Sheets 데이터로 덮어쓰기 (Sheets 우선)
+    merged: dict[str, dict] = {r["date"]: r for r in json_data}
+    for r in gs:
+        merged[r["date"]] = r
+    result = sorted(merged.values(), key=lambda x: x.get("date", ""), reverse=True)
+    # JSON에 없던 Sheets 데이터가 있거나 반대인 경우 → Sheets에 전체 동기화
+    if len(result) > len(gs):
+        _gs_save("smp_rec", result)
+    return result
 
 
 def _save_smp_rec(records: list[dict]) -> None:
@@ -1579,7 +1603,8 @@ with tab3:
     with st.spinner("데이터 수집 중…"):
         all_press_articles = _load_press_releases()
         raw_bills          = _fetch_assembly_bills()
-        bills              = _filter_by_period(raw_bills, policy_period, date_key="propose_date")
+        # 법안은 기간 필터 미적용 — 발의 후 수개월~수년간 유효하므로 22대 국회 전체 표시
+        bills              = raw_bills
 
     # ── 오늘(자정 기준) 일별 표시 필터 ────────────────────────────────────
     # 오늘 00:00 KST 이후 등록분을 기본 표시합니다 (Google Sheets에 영구 보존).
