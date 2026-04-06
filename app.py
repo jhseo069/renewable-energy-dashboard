@@ -424,8 +424,8 @@ def _gs_save(tab: str, data: list[dict]) -> None:
             rows.append(row)
         ws.clear()
         ws.update([headers] + rows)
-    except Exception:
-        pass  # Google Sheets 저장 실패 → 무시 (JSON은 이미 저장됨)
+    except Exception as _e:
+        print(f"[Sheets] _gs_save({tab}) 실패: {_e}")  # 로그에 기록 (JSON은 이미 저장됨)
 
 
 def _gs_archive(source_tab: str, old_items: list[dict]) -> None:
@@ -1594,8 +1594,7 @@ with tab3:
     with st.spinner("데이터 수집 중…"):
         all_press_articles = _load_press_releases()
         raw_bills          = _fetch_assembly_bills()
-        # 법안은 기간 필터 미적용 — 발의 후 수개월~수년간 유효하므로 22대 국회 전체 표시
-        bills              = raw_bills
+        bills              = _filter_by_period(raw_bills, policy_period, date_key="propose_date")
 
     # ── 오늘(자정 기준) 일별 표시 필터 ────────────────────────────────────
     # 오늘 00:00 KST 이후 등록분을 기본 표시합니다 (Google Sheets에 영구 보존).
