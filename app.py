@@ -114,15 +114,6 @@ def _fetch_attachments_cached(link: str) -> list[dict]:
 @st.cache_data(ttl=21600, show_spinner=False)
 def _fetch_assembly_bills() -> list[dict]:
     """국회 법안 수집 (6시간 캐시). API 키 없으면 Mock 반환."""
-    # Streamlit Cloud에서 os.getenv()가 실패할 경우 st.secrets 폴백
-    import execution.law_api as _law_mod
-    if not _law_mod.ASSEMBLY_API_KEY:
-        try:
-            key = st.secrets.get("ASSEMBLY_API_KEY", "")
-            if key:
-                _law_mod.ASSEMBLY_API_KEY = key
-        except Exception:
-            pass
     return fetch_all_bills()
 
 

@@ -22,6 +22,18 @@ load_dotenv()
 ASSEMBLY_API_KEY = os.getenv("ASSEMBLY_API_KEY", "")
 ASSEMBLY_API_BASE = "https://open.assembly.go.kr/portal/openapi"
 
+
+def _get_api_key() -> str:
+    """ASSEMBLY_API_KEY: os.getenv 우선, 실패 시 st.secrets 폴백."""
+    key = ASSEMBLY_API_KEY
+    if not key:
+        try:
+            import streamlit as st
+            key = st.secrets.get("ASSEMBLY_API_KEY", "")
+        except Exception:
+            pass
+    return key
+
 # 추적 대상 법안 검색 키워드 — API SEARCH_WORD 파라미터로 사용
 # 신재생에너지 사업개발(인허가·정책·기술기준) 직접 관련 법안만 모니터링
 BILL_KEYWORDS = [
@@ -158,7 +170,7 @@ def _make_mock_bills() -> list[dict]:
     ]
 
 
-def _fetch_raw_page(page_index: int) -> list[dict]:
+def _fetch_raw_page(page_index: int, api_key: str) -> list[dict]:
     """
     국회 API 단일 페이지 원시 행(row) 목록 반환.
 
@@ -169,7 +181,7 @@ def _fetch_raw_page(page_index: int) -> list[dict]:
     response = requests.get(
         f"{ASSEMBLY_API_BASE}/TVBPMBILL11",
         params={
-            "KEY":    ASSEMBLY_API_KEY,
+            "KEY":    api_key,
             "Type":   "json",
             "pIndex": page_index,
             "pSize":  100,
@@ -210,7 +222,8 @@ def fetch_all_bills() -> list[dict]:
         [{bill_id, title, proposer, committee, status,
           propose_date, link, is_mock}, ...]
     """
-    if not ASSEMBLY_API_KEY:
+    api_key = _get_api_key()
+    if not api_key:
         print("[국회 API] ASSEMBLY_API_KEY 미설정 → Mock 데이터 반환")
         return _make_mock_bills()
 
@@ -222,7 +235,7 @@ def fetch_all_bills() -> list[dict]:
         all_bills: list[dict] = []
 
         for page in range(1, MAX_PAGES + 1):
-            rows = _fetch_raw_page(page)
+            rows = _fetch_raw_page(page, api_key)
             if not rows:
                 break
 
