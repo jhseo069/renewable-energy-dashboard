@@ -41,9 +41,9 @@ def get_kst_now() -> datetime:
 
 
 def _safe_parse_dt(date_str: str) -> datetime:
-    # 뉴스 크롤러: "2026-03-06 14:30" 형식 (날짜+시간)
-    # RSS 크롤러:  "2026-03-06" 형식 (날짜만) → 두 형식 모두 지원
-    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d"):
+    # 뉴스 크롤러: "2026-03-06 14:30" / RSS: "2026-03-06"
+    # 국회 API PROPOSE_DT: "20260415"(YYYYMMDD) 또는 "2026.04.15" 형식 추가 지원
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y%m%d", "%Y.%m.%d"):
         try:
             return datetime.strptime(date_str, fmt)
         except Exception:

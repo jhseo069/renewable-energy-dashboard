@@ -170,13 +170,16 @@ def _make_mock_bills() -> list[dict]:
     ]
 
 
-def _fetch_raw_page(page_index: int, api_key: str) -> list[dict]:
+def _fetch_raw_page(page_index: int, api_key: str) -> tuple[list[dict], int]:
     """
-    국회 API 단일 페이지 원시 행(row) 목록 반환.
+    국회 API 단일 페이지 원시 행(row) 목록과 전체 건수를 반환.
 
     주의: SEARCH_WORD 파라미터는 법안명 검색을 하지 않음 (실측 확인).
-    해당 파라미터 사용 시 '신재생에너지' 검색어에도 16,878건 전체가 반환되며
+    해당 파라미터 사용 시 '신재생에너지' 검색어에도 전체 법안이 반환되며
     1페이지 결과가 건강보험법·약사법 등 무관 법안으로 채워짐 → 사용 안 함.
+
+    Returns:
+        (rows, total_count) — rows: 행 목록, total_count: 전체 건수(헤더 기준)
     """
     response = requests.get(
         f"{ASSEMBLY_API_BASE}/TVBPMBILL11",
@@ -199,11 +202,34 @@ def _fetch_raw_page(page_index: int, api_key: str) -> list[dict]:
         code = result.get("CODE", "")
         msg  = result.get("MESSAGE", "")
         print(f"[국회 API] 에러 응답 (코드: {code}): {msg}")
-        return []
+        return [], 0
 
     api_section = data.get("TVBPMBILL11", [])
+
+    # 헤더(api_section[0])에서 전체 건수 추출
+    # 응답 구조: [{"head": [{"list_total_count": "16878"}, {"RESULT": {...}}]}, {"row": [...]}]
+    total_count = 0
+    if api_section:
+        head_list = api_section[0].get("head", [])
+        if head_list:
+            total_count = int(head_list[0].get("list_total_count", 0))
+
     rows = api_section[1].get("row", []) if len(api_section) > 1 else []
-    return rows
+    return rows, total_count
+
+
+def _normalize_propose_date(raw: str) -> str:
+    """PROPOSE_DT 원시값을 YYYY-MM-DD 형식으로 정규화.
+    국회 API는 YYYYMMDD 또는 YYYY.MM.DD 형식으로 반환하는 경우가 있음."""
+    if not raw:
+        return raw
+    # YYYYMMDD (하이픈 없음)
+    if len(raw) == 8 and raw.isdigit():
+        return f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+    # YYYY.MM.DD
+    if len(raw) == 10 and raw[4] == "." and raw[7] == ".":
+        return raw.replace(".", "-")
+    return raw
 
 
 def fetch_all_bills() -> list[dict]:
@@ -212,11 +238,11 @@ def fetch_all_bills() -> list[dict]:
 
     API 키가 없거나 오류 발생 시 Mock 데이터를 자동 반환합니다.
 
-    설계 변경 (2026-03-09):
-    - SEARCH_WORD 제거: 실측 결과 법안명 검색을 하지 않아 무관 법안 16,878건 반환
-    - 키워드 루프 → 페이지 루프: 최신 N페이지 수집 후 클라이언트 사이드 제목 필터
-    - 위원회 필터 제거: 발의 초기 법안은 CURR_COMMITTEE=None — 위원회 배정 전에도 수집
-    - DETAIL_LINK → LINK_URL: 실제 API 필드명으로 수정 (DETAIL_LINK는 항상 빈값)
+    설계 변경 이력:
+    - 2026-03-09: SEARCH_WORD 제거, 페이지 루프로 전환, LINK_URL 필드 수정
+    - 2026-04-17: 마지막 N페이지 스캔으로 수정 (Bug fix)
+      국회 API는 오름차순(오래된 법안 먼저) 반환 — pages 1~10은 2024년 5~6월 법안만 포함.
+      전체 건수를 먼저 조회한 뒤 마지막 MAX_PAGES 페이지를 스캔해야 최신 법안 수집 가능.
 
     Returns:
         [{bill_id, title, proposer, committee, status,
@@ -228,49 +254,63 @@ def fetch_all_bills() -> list[dict]:
         return _make_mock_bills()
 
     try:
-        # 최신 1000건 스캔 (API 최신순 정렬 기준 → 약 최근 6~8주치)
-        # Cloud 타임아웃 고려: 10페이지 × 15s 타임아웃 = 최대 150s → cache_data로 1회만 호출
-        MAX_PAGES = 10
+        PAGE_SIZE = 100
+        MAX_PAGES = 10  # 최대 스캔 페이지 수 (1000건)
+
+        # 1단계: 1페이지 호출로 전체 건수 파악
+        first_rows, total_count = _fetch_raw_page(1, api_key)
+        if total_count == 0 and not first_rows:
+            print("[국회 API] 전체 건수 0 → Mock 반환")
+            return _make_mock_bills()
+
+        # 전체 페이지 수 계산 후 마지막 MAX_PAGES 페이지 범위 결정
+        # 예: 총 16,900건 → 169페이지, start_page=160
+        total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+        start_page  = max(1, total_pages - MAX_PAGES + 1)
+        print(f"[국회 API] 전체 {total_count}건 ({total_pages}페이지) — pages {start_page}~{total_pages} 스캔")
+
         seen_bill_ids: set[str] = set()
         all_bills: list[dict] = []
 
-        for page in range(1, MAX_PAGES + 1):
-            rows = _fetch_raw_page(page, api_key)
-            if not rows:
-                break
-
+        def _process_rows(rows: list[dict]) -> None:
             for row in rows:
                 title = row.get("BILL_NAME", "") or ""
-                # 제목 키워드 필터 — TITLE_KEYWORDS 중 하나라도 포함해야 수집
                 if not any(kw in title for kw in TITLE_KEYWORDS):
                     continue
-
                 bill_id = row.get("BILL_ID", "")
                 if bill_id in seen_bill_ids:
                     continue
                 seen_bill_ids.add(bill_id)
-
                 raw_status = row.get("PROC_RESULT_CD", "")
                 all_bills.append({
                     "bill_id":      bill_id,
                     "title":        title,
                     "proposer":     row.get("PROPOSER", ""),
-                    # 발의 초기엔 None → "" 처리
                     "committee":    row.get("CURR_COMMITTEE") or "",
                     "status":       BILL_STATUS_MAP.get(raw_status, raw_status or "심사중"),
-                    "propose_date": row.get("PROPOSE_DT", ""),
-                    # DETAIL_LINK는 실제 API 필드가 아님 — LINK_URL이 정확한 키
+                    "propose_date": _normalize_propose_date(row.get("PROPOSE_DT", "")),
                     "link":         row.get("LINK_URL", ""),
                     "is_mock":      False,
                 })
 
+        # 1페이지 결과 처리
+        _process_rows(first_rows)
+
+        # start_page가 1이면 이미 처리했으므로 2페이지부터, 아니면 start_page부터
+        scan_start = max(2, start_page) if start_page == 1 else start_page
+        for page in range(scan_start, total_pages + 1):
+            rows, _ = _fetch_raw_page(page, api_key)
+            if not rows:
+                break
+            _process_rows(rows)
+
         if not all_bills:
-            print(f"[국회 API] {MAX_PAGES}페이지 스캔 결과 필터 통과 법안 0건 → Mock 반환")
+            print(f"[국회 API] 스캔 완료 — 필터 통과 법안 0건 → Mock 반환")
             return _make_mock_bills()
 
         # 발의일 기준 최신순 정렬
         all_bills.sort(key=lambda x: x.get("propose_date", ""), reverse=True)
-        print(f"[국회 API] 수집 완료: {len(all_bills)}건 (최신 {MAX_PAGES * 100}건 스캔)")
+        print(f"[국회 API] 수집 완료: {len(all_bills)}건")
         return all_bills
 
     except Exception as e:
