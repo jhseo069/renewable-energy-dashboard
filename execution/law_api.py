@@ -259,8 +259,14 @@ def fetch_all_bills() -> list[dict]:
 
         # 1단계: 1페이지 호출로 전체 건수 파악
         first_rows, total_count = _fetch_raw_page(1, api_key)
-        if total_count == 0 and not first_rows:
-            print("[국회 API] 전체 건수 0 → Mock 반환")
+
+        # total_count 파싱 실패 보정: rows가 있는데 count가 0이면 22대 국회 기준 최솟값 가정
+        # API 응답 구조가 다를 경우를 대비한 안전망
+        if total_count == 0 and first_rows:
+            total_count = 15000
+            print("[국회 API] list_total_count 파싱 실패 — 15,000건으로 가정")
+        elif total_count == 0 and not first_rows:
+            print("[국회 API] 응답 없음 → Mock 반환")
             return _make_mock_bills()
 
         # 전체 페이지 수 계산 후 마지막 MAX_PAGES 페이지 범위 결정
@@ -293,11 +299,14 @@ def fetch_all_bills() -> list[dict]:
                     "is_mock":      False,
                 })
 
-        # 1페이지 결과 처리
-        _process_rows(first_rows)
+        # start_page가 1이면 이미 갖고 있는 first_rows 처리 후 2페이지부터 스캔
+        # start_page가 1 초과면 first_rows는 버리고(2024년 구법안) start_page부터 스캔
+        if start_page == 1:
+            _process_rows(first_rows)
+            scan_start = 2
+        else:
+            scan_start = start_page
 
-        # start_page가 1이면 이미 처리했으므로 2페이지부터, 아니면 start_page부터
-        scan_start = max(2, start_page) if start_page == 1 else start_page
         for page in range(scan_start, total_pages + 1):
             rows, _ = _fetch_raw_page(page, api_key)
             if not rows:
@@ -305,7 +314,7 @@ def fetch_all_bills() -> list[dict]:
             _process_rows(rows)
 
         if not all_bills:
-            print(f"[국회 API] 스캔 완료 — 필터 통과 법안 0건 → Mock 반환")
+            print("[국회 API] 스캔 완료 — 필터 통과 법안 0건 → Mock 반환")
             return _make_mock_bills()
 
         # 발의일 기준 최신순 정렬

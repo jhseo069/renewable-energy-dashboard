@@ -1873,6 +1873,13 @@ with tab3:
         st.markdown('<p class="section-title">🏛️ 국회 법안 동향 (신재생)</p>', unsafe_allow_html=True)
         # bills는 상단에서 이미 수집됨
 
+        # raw_bills 수집 결과 상태 안내 (기간 필터 전 전체 건수)
+        real_bill_count = sum(1 for b in raw_bills if not b.get("is_mock"))
+        if real_bill_count > 0:
+            st.caption(f"API 수집: {real_bill_count}건 | 기간 필터 후: {len(bills)}건")
+        elif raw_bills and raw_bills[0].get("is_mock"):
+            st.caption("⚠️ API 키 미설정 — Mock 데이터")
+
         if bills:
             is_mock_mode = any(b["is_mock"] for b in bills)
             if is_mock_mode:
