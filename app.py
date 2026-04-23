@@ -1796,7 +1796,7 @@ with tab3:
                             st.markdown(st.session_state[rss_result_key])
 
                     with st.container(height=400):
-                        for article in articles:
+                        for idx, article in enumerate(articles):
                             c_card, c_del = st.columns([10, 1])
                             with c_card:
                                 cat_badge = (
@@ -1841,10 +1841,10 @@ with tab3:
                                             label=f"📎 {att['name']}",
                                             data=att_path.read_bytes(),
                                             file_name=att["name"],
-                                            key=f"pr_att_{article.get('added_at','')}_{att['saved']}",
+                                            key=f"pr_att_{dept}_{idx}_{att['saved']}",
                                         )
                             with c_del:
-                                del_key = f"del_pr_{article.get('added_at', '')}"
+                                del_key = f"del_pr_{dept}_{idx}_{article.get('added_at', '')}"
                                 if st.button("🗑️", key=del_key, help="이 보도자료 삭제"):
                                     all_press = _load_press_releases()
                                     all_press = [
