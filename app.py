@@ -1723,7 +1723,7 @@ with tab3:
                     st.cache_data.clear()
                     att_msg = f" (첨부 {len(pr_saved_files)}개)" if pr_saved_files else ""
                     st.success(f"✅ 보도자료가 등록되었습니다: {pr_title.strip()}{att_msg}")
-                    # 폼 필드 초기화 (제목·링크·요약·파일업로더)
+                    # 폼 필드 초기화 (부처·카테고리 제외 — 연속 등록 시 유지가 편리)
                     for _k in ["pr_form_title", "pr_form_link", "pr_form_summary"]:
                         if _k in st.session_state:
                             del st.session_state[_k]
@@ -2082,6 +2082,7 @@ with tab4:
                 })
                 smp_records.sort(key=lambda x: x["date"], reverse=True)
                 _save_smp_rec(smp_records)
+                st.cache_data.clear()
                 st.rerun()
                 
     if smp_records:
@@ -2266,11 +2267,10 @@ with tab4:
                                     label=f"📎 {att['name']}",
                                     data=att_path.read_bytes(),
                                     file_name=att["name"],
-                                    key=f"att_{notice.get('added_at','')}_{att['saved']}",
+                                    key=f"att_{org_key}_{idx}_{att['saved']}",
                                 )
                     with c_del:
-                        # 삭제 버튼 — org_key + added_at 조합으로 고유 키 생성
-                        del_key = f"del_{org_key}_{notice.get('added_at','')}"
+                        del_key = f"del_{org_key}_{idx}_{notice.get('added_at','')}"
                         if st.button("🗑️", key=del_key, help="이 공지 삭제"):
                             # added_at 기준 삭제 — org_key+title+date 조합은 중복 공지 2건 모두 삭제될 수 있음
                             all_notices = [
