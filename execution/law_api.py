@@ -238,11 +238,10 @@ def fetch_all_bills() -> list[dict]:
 
     API 키가 없거나 오류 발생 시 Mock 데이터를 자동 반환합니다.
 
-    설계 변경 이력:
-    - 2026-03-09: SEARCH_WORD 제거, 페이지 루프로 전환, LINK_URL 필드 수정
-    - 2026-04-17: 마지막 N페이지 스캔으로 수정 (Bug fix)
-      국회 API는 오름차순(오래된 법안 먼저) 반환 — pages 1~10은 2024년 5~6월 법안만 포함.
-      전체 건수를 먼저 조회한 뒤 마지막 MAX_PAGES 페이지를 스캔해야 최신 법안 수집 가능.
+    정렬 방향 확인 (2026-04-28):
+    - 국회 API는 내림차순(최신 법안 먼저) 반환이 실측으로 확인됨
+    - pages 1~10 = 가장 최신 1,000건 (약 최근 6~8주치)
+    - 따라서 pages 1~MAX_PAGES를 순서대로 스캔하면 최신 법안을 모두 수집 가능
 
     Returns:
         [{bill_id, title, proposer, committee, status,
@@ -254,31 +253,16 @@ def fetch_all_bills() -> list[dict]:
         return _make_mock_bills()
 
     try:
-        PAGE_SIZE = 100
-        MAX_PAGES = 10  # 최대 스캔 페이지 수 (1000건)
-
-        # 1단계: 1페이지 호출로 전체 건수 파악
-        first_rows, total_count = _fetch_raw_page(1, api_key)
-
-        # total_count 파싱 실패 보정: rows가 있는데 count가 0이면 22대 국회 기준 최솟값 가정
-        # API 응답 구조가 다를 경우를 대비한 안전망
-        if total_count == 0 and first_rows:
-            total_count = 15000
-            print("[국회 API] list_total_count 파싱 실패 — 15,000건으로 가정")
-        elif total_count == 0 and not first_rows:
-            print("[국회 API] 응답 없음 → Mock 반환")
-            return _make_mock_bills()
-
-        # 전체 페이지 수 계산 후 마지막 MAX_PAGES 페이지 범위 결정
-        # 예: 총 16,900건 → 169페이지, start_page=160
-        total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
-        start_page  = max(1, total_pages - MAX_PAGES + 1)
-        print(f"[국회 API] 전체 {total_count}건 ({total_pages}페이지) — pages {start_page}~{total_pages} 스캔")
-
+        # 최신 1,000건 스캔 (API 내림차순 정렬 — page 1 = 최신)
+        MAX_PAGES = 10
         seen_bill_ids: set[str] = set()
         all_bills: list[dict] = []
 
-        def _process_rows(rows: list[dict]) -> None:
+        for page in range(1, MAX_PAGES + 1):
+            rows, _ = _fetch_raw_page(page, api_key)
+            if not rows:
+                break
+
             for row in rows:
                 title = row.get("BILL_NAME", "") or ""
                 if not any(kw in title for kw in TITLE_KEYWORDS):
@@ -299,22 +283,8 @@ def fetch_all_bills() -> list[dict]:
                     "is_mock":      False,
                 })
 
-        # start_page가 1이면 이미 갖고 있는 first_rows 처리 후 2페이지부터 스캔
-        # start_page가 1 초과면 first_rows는 버리고(2024년 구법안) start_page부터 스캔
-        if start_page == 1:
-            _process_rows(first_rows)
-            scan_start = 2
-        else:
-            scan_start = start_page
-
-        for page in range(scan_start, total_pages + 1):
-            rows, _ = _fetch_raw_page(page, api_key)
-            if not rows:
-                break
-            _process_rows(rows)
-
         if not all_bills:
-            print("[국회 API] 스캔 완료 — 필터 통과 법안 0건 → Mock 반환")
+            print(f"[국회 API] {MAX_PAGES}페이지 스캔 완료 — 필터 통과 법안 0건 → Mock 반환")
             return _make_mock_bills()
 
         # 발의일 기준 최신순 정렬
