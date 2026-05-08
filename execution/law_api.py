@@ -11,6 +11,7 @@ API 엔드포인트: https://open.assembly.go.kr/portal/openapi/TVBPMBILL11
 """
 
 import os
+import time
 import requests
 from datetime import datetime
 from dotenv import load_dotenv
@@ -21,6 +22,16 @@ load_dotenv()
 # os.getenv 사용 이유: .env에 키를 넣으면 코드 변경 없이 실서버 전환 가능
 ASSEMBLY_API_KEY = os.getenv("ASSEMBLY_API_KEY", "")
 ASSEMBLY_API_BASE = "https://open.assembly.go.kr/portal/openapi"
+
+# 한국 정부 API는 국제 호출 시 응답 지연 잦음 — 타임아웃 30초 + User-Agent 위장
+# (일부 정부 서버가 기본 python-requests UA를 거부)
+_REQUEST_TIMEOUT = 30
+_REQUEST_HEADERS = {
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept":          "application/json, text/plain, */*",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Connection":      "close",
+}
 
 
 def _get_api_key() -> str:
@@ -183,20 +194,38 @@ def _fetch_raw_page(page_index: int, api_key: str) -> tuple[list[dict], int]:
     해당 파라미터 사용 시 '신재생에너지' 검색어에도 전체 법안이 반환되며
     1페이지 결과가 건강보험법·약사법 등 무관 법안으로 채워짐 → 사용 안 함.
 
+    재시도 정책: ConnectTimeout/ConnectionError 발생 시 최대 3회 재시도 (1초·2초 지연).
+    Streamlit Cloud(미국)→open.assembly.go.kr(한국) 국제 호출 지연 대응.
+
     Returns:
         (rows, total_count) — rows: 행 목록, total_count: 전체 건수(헤더 기준)
     """
-    response = requests.get(
-        f"{ASSEMBLY_API_BASE}/TVBPMBILL11",
-        params={
-            "KEY":    api_key,
-            "Type":   "json",
-            "pIndex": page_index,
-            "pSize":  100,
-            "AGE":    22,   # 제22대 국회 (2024.05.30~) 고정
-        },
-        timeout=15,
-    )
+    last_exc: Exception = RuntimeError("요청 실패")
+    response = None
+    for attempt in range(3):
+        try:
+            response = requests.get(
+                f"{ASSEMBLY_API_BASE}/TVBPMBILL11",
+                params={
+                    "KEY":    api_key,
+                    "Type":   "json",
+                    "pIndex": page_index,
+                    "pSize":  100,
+                    "AGE":    22,   # 제22대 국회 (2024.05.30~) 고정
+                },
+                headers=_REQUEST_HEADERS,
+                timeout=_REQUEST_TIMEOUT,
+            )
+            break
+        except (requests.exceptions.ConnectTimeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ReadTimeout) as e:
+            last_exc = e
+            if attempt < 2:
+                time.sleep(1 + attempt)  # 1초, 2초 백오프
+    else:
+        raise last_exc
+
     response.raise_for_status()
     data = response.json()
 
