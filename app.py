@@ -1884,7 +1884,8 @@ with tab3:
                 f"| 기간 필터 후: {len(bills)}건"
             )
         elif raw_bills and raw_bills[0].get("is_mock"):
-            st.caption("⚠️ API 키 미설정 — Mock 데이터")
+            mock_reason = raw_bills[0].get("mock_reason", "사유 미상")
+            st.warning(f"⚠️ Mock 데이터 표시 중 — 사유: {mock_reason}")
         else:
             st.caption("⚠️ API 수집 0건 — API 키·서버 상태 확인 필요")
 

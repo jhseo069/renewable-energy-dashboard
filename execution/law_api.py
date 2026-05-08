@@ -120,13 +120,14 @@ BILL_STATUS_MAP = {
 }
 
 
-def _make_mock_bills() -> list[dict]:
+def _make_mock_bills(error_reason: str = "") -> list[dict]:
     """
-    API 키 없을 때 반환할 Mock 법안 데이터.
-    실제 발의됐거나 예상되는 법안 형태로 작성 — 개발·테스트 목적.
-    is_mock=True 로 마킹해 UI에서 '[API 연동 전]' 배지 표시 가능.
+    API 호출 실패 또는 키 미설정 시 반환할 Mock 법안 데이터.
+
+    Args:
+        error_reason: UI에 표시할 구체적 실패 사유 (첫 항목에 mock_reason으로 부착)
     """
-    return [
+    bills = [
         {
             "bill_id": "MOCK-2026-001",
             "title": "해상풍력발전 지원 및 집적화단지 조성에 관한 특별법안",
@@ -168,6 +169,10 @@ def _make_mock_bills() -> list[dict]:
             "is_mock": True,
         },
     ]
+    # 실패 사유를 첫 항목에 부착 — UI에서 raw_bills[0].get("mock_reason") 으로 읽음
+    if bills and error_reason:
+        bills[0]["mock_reason"] = error_reason
+    return bills
 
 
 def _fetch_raw_page(page_index: int, api_key: str) -> tuple[list[dict], int]:
@@ -250,7 +255,7 @@ def fetch_all_bills() -> list[dict]:
     api_key = _get_api_key()
     if not api_key:
         print("[국회 API] ASSEMBLY_API_KEY 미설정 → Mock 데이터 반환")
-        return _make_mock_bills()
+        return _make_mock_bills(error_reason="API 키 미설정 (Streamlit Secrets에 ASSEMBLY_API_KEY 설정 필요)")
 
     try:
         # 최신 1,000건 스캔 (API 내림차순 정렬 — page 1 = 최신)
@@ -285,7 +290,9 @@ def fetch_all_bills() -> list[dict]:
 
         if not all_bills:
             print(f"[국회 API] {MAX_PAGES}페이지 스캔 완료 — 필터 통과 법안 0건 → Mock 반환")
-            return _make_mock_bills()
+            return _make_mock_bills(
+                error_reason=f"{MAX_PAGES}페이지({MAX_PAGES * 100}건) 스캔 완료, 신재생 키워드 매칭 0건 (일일 쿼터 1,000건 초과 가능성)"
+            )
 
         # 발의일 기준 최신순 정렬
         all_bills.sort(key=lambda x: x.get("propose_date", ""), reverse=True)
@@ -294,7 +301,7 @@ def fetch_all_bills() -> list[dict]:
 
     except Exception as e:
         print(f"[국회 API] 수집 실패: {e} → Mock 데이터 반환")
-        return _make_mock_bills()
+        return _make_mock_bills(error_reason=f"API 호출 실패: {type(e).__name__} — {str(e)[:100]}")
 
 
 # ── 단독 실행 시 테스트 ────────────────────────────────────────────────
